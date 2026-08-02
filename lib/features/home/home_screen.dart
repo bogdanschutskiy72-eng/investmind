@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../../shared/widgets/feature_tile.dart';
+import '../market/market_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -14,7 +16,6 @@ class HomeScreen extends StatelessWidget {
             children: [
               const SizedBox(height: 20),
 
-              // Логотип / название
               const Center(
                 child: Text(
                   'InvestMind',
@@ -25,31 +26,28 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 30),
 
-              // Приветствие
               const Text(
                 'Добрый вечер, Богдан 👋',
                 style: TextStyle(
-                  fontSize: 28,
+                  fontSize: 30,
                   fontWeight: FontWeight.bold,
                 ),
               ),
 
               const SizedBox(height: 8),
 
-              Text(
+              const Text(
                 'Анализируй.\nПонимай.\nИнвестируй осознанно.',
                 style: TextStyle(
                   fontSize: 18,
-                  color: Colors.grey.shade400,
-                  height: 1.5,
+                  color: Colors.white70,
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 30),
 
-              // Поиск
               TextField(
                 decoration: InputDecoration(
                   hintText: 'Найти компанию...',
@@ -57,7 +55,7 @@ class HomeScreen extends StatelessWidget {
                   filled: true,
                   fillColor: const Color(0xFF1E293B),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(20),
                     borderSide: BorderSide.none,
                   ),
                 ),
@@ -65,17 +63,15 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 24),
 
-              // Карточка дня
               Container(
-                width: double.infinity,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E293B),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Column(
+                child: const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Text(
                       '💡 Честный вывод дня',
                       style: TextStyle(
@@ -83,32 +79,28 @@ class HomeScreen extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    SizedBox(height: 12),
+                    SizedBox(height: 10),
                     Text(
-                      'Компании, связанные с искусственным интеллектом, '
-                      'продолжают демонстрировать рост, но высокая оценка '
-                      'требует осторожности.',
-                      style: TextStyle(
-                        fontSize: 15,
-                        height: 1.5,
-                      ),
+                      'Компании, связанные с искусственным интеллектом, продолжают демонстрировать рост, но высокая оценка требует осторожности.',
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 28),
+              const SizedBox(height: 24),
 
               Row(
-                children: const [
+                children: [
                   FeatureTile(
                     icon: Icons.star,
                     title: 'Избранное',
+                    onTap: () {},
                   ),
-                  SizedBox(width: 16),
+                  const SizedBox(width: 16),
                   FeatureTile(
                     icon: Icons.analytics,
                     title: 'Анализы',
+                    onTap: () {},
                   ),
                 ],
               ),
@@ -116,20 +108,27 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 16),
 
               Row(
-                children: const [
+                children: [
                   FeatureTile(
                     icon: Icons.public,
                     title: 'Рынок',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const MarketScreen(),
+                        ),
+                      );
+                    },
                   ),
-                  SizedBox(width: 16),
+                  const SizedBox(width: 16),
                   FeatureTile(
                     icon: Icons.account_balance_wallet,
                     title: 'Портфель',
+                    onTap: () {},
                   ),
                 ],
               ),
-
-              const SizedBox(height: 24),
             ],
           ),
         ),
