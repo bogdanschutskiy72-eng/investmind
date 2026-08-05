@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../shared/widgets/feature_tile.dart';
 import '../favorites/favorites_screen.dart';
 import '../market/market_screen.dart';
+import '../portfolio/portfolio_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -114,14 +115,21 @@ class HomeScreen extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (_) => const MarketScreen(),
-                        ),
-                      );
+                        ),);
                     },
-                  ),const SizedBox(width: 16),
+                  ),
+                  const SizedBox(width: 16),
                   FeatureTile(
                     icon: Icons.account_balance_wallet,
                     title: 'Портфель',
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PortfolioScreen(),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
