@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/favorites_service.dart';
+import '../services/portfolio_service.dart';
 import '../services/stock_service.dart';
 import '../shared/widgets/info_card.dart';
 import '../shared/widgets/price_chart.dart';
@@ -121,48 +122,210 @@ class _CompanyScreenState extends State<CompanyScreen> {
     return '$day.$month в $hour:$minute';
   }
 
+  double? _parseNumber(String value) {
+    return double.tryParse(
+      value.trim().replaceAll(',', '.'),
+    );
+  }
+
+  Future<void> _showPurchaseDialog({
+    required String symbol,
+    required double currentPrice,
+  }) async {
+    final quantityController = TextEditingController(
+      text: '1',
+    );
+
+    final priceController = TextEditingController(
+      text: currentPrice.toStringAsFixed(2),
+    );
+
+    final formKey = GlobalKey<FormState>();
+
+    final existingPosition =
+        PortfolioService.instance.findPosition(symbol);
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Добавить покупку'),
+          content: SizedBox(
+            width: 400,
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${widget.company} • $symbol',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),if (existingPosition != null) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        'Сейчас в портфеле: '
+                        '${existingPosition.quantity} акц.\n'
+                        'Средняя цена: '
+                        '${_formatPrice(existingPosition.averagePrice)}',
+                        style: const TextStyle(
+                          color: Colors.white60,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 20),
+                    TextFormField(
+                      controller: quantityController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Количество акций',
+                        hintText: 'Например, 1.5',
+                      ),
+                      validator: (value) {
+                        final quantity = _parseNumber(
+                          value ?? '',
+                        );
+
+                        if (quantity == null || quantity <= 0) {
+                          return 'Введите количество больше нуля';
+                        }
+
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: priceController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Цена покупки',
+                        prefixText: '\$ ',
+                      ),
+                      validator: (value) {
+                        final price = _parseNumber(
+                          value ?? '',
+                        );
+
+                        if (price == null || price <= 0) {
+                          return 'Введите цену больше нуля';
+                        }
+
+                        return null;
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, false);
+              },
+              child: const Text('Отмена'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) {
+                  return;
+                }
+
+                final quantity = _parseNumber(
+                  quantityController.text,
+                )!;
+
+                final purchasePrice = _parseNumber(
+                  priceController.text,
+                )!;
+
+                await PortfolioService.instance.addPurchase(
+                  company: widget.company,
+                  symbol: symbol,
+                  quantity: quantity,
+                  purchasePrice: purchasePrice,
+                );
+
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext, true);
+                }
+              },
+              child: const Text('Добавить'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '$symbol добавлен в портфель',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final symbol = _symbolForCompany(widget.company);
 
     return Scaffold(
-appBar: AppBar(
-  title: Text(widget.company),
-  actions: [
-    ValueListenableBuilder<Set<String>>(
-      valueListenable: FavoritesService.instance.favorites,
-      builder: (context, favorites, _) {
-        final isFavorite = favorites.contains(widget.company);
+      appBar: AppBar(
+        title: Text(widget.company),
+        actions: [
+          ValueListenableBuilder<Set<String>>(
+            valueListenable:
+                FavoritesService.instance.favorites,builder: (context, favorites, _) {
+              final isFavorite = favorites.contains(
+                widget.company,
+              );
 
-        return IconButton(
-          onPressed: () {
-            FavoritesService.instance.toggleFavorite(
-              widget.company,
-            );
-          },
-          tooltip: isFavorite
-              ? 'Удалить из избранного'
-              : 'Добавить в избранное',
-          icon: Icon(
-            isFavorite ? Icons.star : Icons.star_border,
-            color: isFavorite
-                ? const Color(0xFF20D3C2)
-                : Colors.white,
+              return IconButton(
+                onPressed: () async {
+                  await FavoritesService.instance.toggleFavorite(
+                    widget.company,
+                  );
+                },
+                tooltip: isFavorite
+                    ? 'Удалить из избранного'
+                    : 'Добавить в избранное',
+                icon: Icon(
+                  isFavorite
+                      ? Icons.star
+                      : Icons.star_border,
+                  color: isFavorite
+                      ? const Color(0xFF20D3C2)
+                      : Colors.white,
+                ),
+              );
+            },
           ),
-        );
-      },
-    ),
-    IconButton(
-      onPressed: _refreshQuote,
-      tooltip: 'Обновить котировку',
-      icon: const Icon(Icons.refresh),
-    ),
-  ],
-),
+          IconButton(
+            onPressed: _refreshQuote,
+            tooltip: 'Обновить котировку',
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
       body: FutureBuilder<StockQuote>(
         future: _quoteFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState ==
+              ConnectionState.waiting) {
             return const Center(
               child: CircularProgressIndicator(),
             );
@@ -187,7 +350,8 @@ appBar: AppBar(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
-                    ),const SizedBox(height: 8),
+                    ),
+                    const SizedBox(height: 8),
                     Text(
                       snapshot.error.toString(),
                       textAlign: TextAlign.center,
@@ -248,8 +412,7 @@ appBar: AppBar(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
-                    borderRadius: BorderRadius.circular(20),
+                    color: const Color(0xFF1E293B),borderRadius: BorderRadius.circular(20),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -290,19 +453,36 @@ appBar: AppBar(
                           fontSize: 13,
                         ),
                       ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            _showPurchaseDialog(
+                              symbol: symbol,
+                              currentPrice: quote.currentPrice,
+                            );
+                          },
+                          icon: const Icon(
+                            Icons.add_shopping_cart,
+                          ),
+                          label: const Text(
+                            'Добавить покупку в портфель',
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 24),
-
                 PriceChart(
                   symbol: symbol,
                 ),
-
                 const SizedBox(height: 24),
                 const Text(
                   'Данные за торговый день',
-                  style: TextStyle(fontSize: 22,
+                  style: TextStyle(
+                    fontSize: 22,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -339,8 +519,7 @@ appBar: AppBar(
                 const SizedBox(height: 24),
                 const Text(
                   'Краткий анализ',
-                  style: TextStyle(
-                    fontSize: 22,
+                  style: TextStyle(fontSize: 22,
                     fontWeight: FontWeight.bold,
                   ),
                 ),

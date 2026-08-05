@@ -80,7 +80,80 @@ class PortfolioService {
       }
     }
 
+    loadedPositions.sort(
+      (first, second) =>
+          first.symbol.compareTo(second.symbol),
+    );
+
     positions.value = loadedPositions;
+  }
+
+  Future<void> addPurchase({
+    required String company,
+    required String symbol,
+    required double quantity,
+    required double purchasePrice,
+  }) async {
+    final normalizedSymbol = symbol.trim().toUpperCase();
+    final normalizedCompany = company.trim();
+
+    if (normalizedSymbol.isEmpty ||
+        quantity <= 0 ||
+        purchasePrice <= 0) {
+      throw ArgumentError(
+        'Проверь тикер, количество и цену покупки.',
+      );
+    }
+
+    final updated = List<PortfolioPosition>.from(
+      positions.value,
+    );
+
+    final existingIndex = updated.indexWhere(
+      (position) => position.symbol == normalizedSymbol,
+    );
+
+    if (existingIndex >= 0) {
+      final existing = updated[existingIndex];
+
+      final totalQuantity = existing.quantity + quantity;
+
+      final totalInvested =
+          existing.investedAmount +
+          quantity * purchasePrice;
+
+      final newAveragePrice =
+          totalInvested / totalQuantity;
+
+      updated[existingIndex] = PortfolioPosition(
+        company: normalizedCompany.isEmpty
+            ? existing.company
+            : normalizedCompany,
+        symbol: normalizedSymbol,
+        quantity: totalQuantity,
+        averagePrice: newAveragePrice,
+      );
+    } else {
+      updated.add(
+        PortfolioPosition(
+          company: normalizedCompany.isEmpty
+              ? normalizedSymbol
+              : normalizedCompany,
+          symbol: normalizedSymbol,
+          quantity: quantity,
+          averagePrice: purchasePrice,
+        ),
+      );
+    }
+
+    updated.sort(
+      (first, second) =>
+          first.symbol.compareTo(second.symbol),
+    );
+
+    positions.value = updated;
+
+    await _save();
   }
 
   Future<void> addOrUpdatePosition({
@@ -88,8 +161,8 @@ class PortfolioService {
     required String symbol,
     required double quantity,
     required double averagePrice,
-  }) async {
-    final normalizedSymbol = symbol.trim().toUpperCase();
+  }) async {final normalizedSymbol = symbol.trim().toUpperCase();
+    final normalizedCompany = company.trim();
 
     if (normalizedSymbol.isEmpty ||
         quantity <= 0 ||
@@ -108,9 +181,9 @@ class PortfolioService {
     );
 
     final newPosition = PortfolioPosition(
-      company: company.trim().isEmpty
+      company: normalizedCompany.isEmpty
           ? normalizedSymbol
-          : company.trim(),
+          : normalizedCompany,
       symbol: normalizedSymbol,
       quantity: quantity,
       averagePrice: averagePrice,
@@ -137,7 +210,8 @@ class PortfolioService {
 
     final updated = positions.value
         .where(
-          (position) => position.symbol != normalizedSymbol,
+          (position) =>
+              position.symbol != normalizedSymbol,
         )
         .toList();
 
@@ -161,7 +235,9 @@ class PortfolioService {
   Future<void> _save() async {
     final encodedPositions = positions.value
         .map(
-          (position) => jsonEncode(position.toJson()),
+          (position) => jsonEncode(
+            position.toJson(),
+          ),
         )
         .toList();
 
