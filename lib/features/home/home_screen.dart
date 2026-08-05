@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../shared/widgets/feature_tile.dart';
+import '../favorites/favorites_screen.dart';
 import '../market/market_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -15,7 +16,6 @@ class HomeScreen extends StatelessWidget {
           child: ListView(
             children: [
               const SizedBox(height: 20),
-
               const Center(
                 child: Text(
                   'InvestMind',
@@ -25,9 +25,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
-
               const SizedBox(height: 30),
-
               const Text(
                 'Добрый вечер, Богдан 👋',
                 style: TextStyle(
@@ -35,9 +33,7 @@ class HomeScreen extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-
               const SizedBox(height: 8),
-
               const Text(
                 'Анализируй.\nПонимай.\nИнвестируй осознанно.',
                 style: TextStyle(
@@ -45,9 +41,7 @@ class HomeScreen extends StatelessWidget {
                   color: Colors.white70,
                 ),
               ),
-
               const SizedBox(height: 30),
-
               TextField(
                 decoration: InputDecoration(
                   hintText: 'Найти компанию...',
@@ -60,9 +54,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
-
               const SizedBox(height: 24),
-
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -81,20 +73,27 @@ class HomeScreen extends StatelessWidget {
                     ),
                     SizedBox(height: 10),
                     Text(
-                      'Компании, связанные с искусственным интеллектом, продолжают демонстрировать рост, но высокая оценка требует осторожности.',
+                      'Компании, связанные с искусственным интеллектом, '
+                      'продолжают демонстрировать рост, но высокая оценка '
+                      'требует осторожности.',
                     ),
                   ],
                 ),
               ),
-
               const SizedBox(height: 24),
-
               Row(
                 children: [
                   FeatureTile(
                     icon: Icons.star,
                     title: 'Избранное',
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const FavoritesScreen(),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(width: 16),
                   FeatureTile(
@@ -104,9 +103,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ],
               ),
-
               const SizedBox(height: 16),
-
               Row(
                 children: [
                   FeatureTile(
@@ -120,8 +117,7 @@ class HomeScreen extends StatelessWidget {
                         ),
                       );
                     },
-                  ),
-                  const SizedBox(width: 16),
+                  ),const SizedBox(width: 16),
                   FeatureTile(
                     icon: Icons.account_balance_wallet,
                     title: 'Портфель',

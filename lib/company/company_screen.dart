@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../services/favorites_service.dart';
 import '../services/stock_service.dart';
 import '../shared/widgets/info_card.dart';
 import '../shared/widgets/price_chart.dart';
@@ -125,16 +126,39 @@ class _CompanyScreenState extends State<CompanyScreen> {
     final symbol = _symbolForCompany(widget.company);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.company),
-        actions: [
-          IconButton(
-            onPressed: _refreshQuote,
-            tooltip: 'Обновить котировку',
-            icon: const Icon(Icons.refresh),
+appBar: AppBar(
+  title: Text(widget.company),
+  actions: [
+    ValueListenableBuilder<Set<String>>(
+      valueListenable: FavoritesService.instance.favorites,
+      builder: (context, favorites, _) {
+        final isFavorite = favorites.contains(widget.company);
+
+        return IconButton(
+          onPressed: () {
+            FavoritesService.instance.toggleFavorite(
+              widget.company,
+            );
+          },
+          tooltip: isFavorite
+              ? 'Удалить из избранного'
+              : 'Добавить в избранное',
+          icon: Icon(
+            isFavorite ? Icons.star : Icons.star_border,
+            color: isFavorite
+                ? const Color(0xFF20D3C2)
+                : Colors.white,
           ),
-        ],
-      ),
+        );
+      },
+    ),
+    IconButton(
+      onPressed: _refreshQuote,
+      tooltip: 'Обновить котировку',
+      icon: const Icon(Icons.refresh),
+    ),
+  ],
+),
       body: FutureBuilder<StockQuote>(
         future: _quoteFuture,
         builder: (context, snapshot) {
