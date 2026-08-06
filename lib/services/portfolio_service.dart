@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'transaction_service.dart';
+
 class PortfolioPosition {
   final String company;
   final String symbol;
@@ -43,7 +45,8 @@ class PortfolioPosition {
 class PortfolioService {
   PortfolioService._();
 
-  static final PortfolioService instance = PortfolioService._();
+  static final PortfolioService instance =
+      PortfolioService._();
 
   static const String _storageKey = 'portfolio_positions';
 
@@ -67,7 +70,8 @@ class PortfolioService {
         final decoded = jsonDecode(item);
 
         if (decoded is Map<String, dynamic>) {
-          final position = PortfolioPosition.fromJson(decoded);
+          final position =
+              PortfolioPosition.fromJson(decoded);
 
           if (position.symbol.isNotEmpty &&
               position.quantity > 0 &&
@@ -94,7 +98,9 @@ class PortfolioService {
     required double quantity,
     required double purchasePrice,
   }) async {
-    final normalizedSymbol = symbol.trim().toUpperCase();
+    final normalizedSymbol =
+        symbol.trim().toUpperCase();
+
     final normalizedCompany = company.trim();
 
     if (normalizedSymbol.isEmpty ||
@@ -105,18 +111,19 @@ class PortfolioService {
       );
     }
 
-    final updated = List<PortfolioPosition>.from(
-      positions.value,
-    );
+    final updated =
+        List<PortfolioPosition>.from(positions.value);
 
     final existingIndex = updated.indexWhere(
-      (position) => position.symbol == normalizedSymbol,
+      (position) =>
+          position.symbol == normalizedSymbol,
     );
 
     if (existingIndex >= 0) {
       final existing = updated[existingIndex];
 
-      final totalQuantity = existing.quantity + quantity;
+      final totalQuantity =
+          existing.quantity + quantity;
 
       final totalInvested =
           existing.investedAmount +
@@ -154,6 +161,86 @@ class PortfolioService {
     positions.value = updated;
 
     await _save();
+
+    await TransactionService.instance.addTransaction(
+      company: normalizedCompany.isEmpty
+          ? normalizedSymbol: normalizedCompany,
+      symbol: normalizedSymbol,
+      type: TransactionType.buy,
+      quantity: quantity,
+      price: purchasePrice,
+    );
+  }
+
+  Future<double> sellPosition({
+    required String symbol,
+    required double quantity,
+    required double salePrice,
+  }) async {
+    final normalizedSymbol =
+        symbol.trim().toUpperCase();
+
+    if (normalizedSymbol.isEmpty ||
+        quantity <= 0 ||
+        salePrice <= 0) {
+      throw ArgumentError(
+        'Проверь тикер, количество и цену продажи.',
+      );
+    }
+
+    final updated =
+        List<PortfolioPosition>.from(positions.value);
+
+    final existingIndex = updated.indexWhere(
+      (position) =>
+          position.symbol == normalizedSymbol,
+    );
+
+    if (existingIndex < 0) {
+      throw StateError(
+        'Позиция $normalizedSymbol не найдена.',
+      );
+    }
+
+    final existing = updated[existingIndex];
+
+    if (quantity > existing.quantity) {
+      throw StateError(
+        'Нельзя продать больше акций, чем есть в портфеле.',
+      );
+    }
+
+    final realizedProfit =
+        (salePrice - existing.averagePrice) * quantity;
+
+    final remainingQuantity =
+        existing.quantity - quantity;
+
+    if (remainingQuantity <= 0.000001) {
+      updated.removeAt(existingIndex);
+    } else {
+      updated[existingIndex] = PortfolioPosition(
+        company: existing.company,
+        symbol: existing.symbol,
+        quantity: remainingQuantity,
+        averagePrice: existing.averagePrice,
+      );
+    }
+
+    positions.value = updated;
+
+    await _save();
+
+    await TransactionService.instance.addTransaction(
+      company: existing.company,
+      symbol: existing.symbol,
+      type: TransactionType.sell,
+      quantity: quantity,
+      price: salePrice,
+      realizedProfit: realizedProfit,
+    );
+
+    return realizedProfit;
   }
 
   Future<void> addOrUpdatePosition({
@@ -161,7 +248,10 @@ class PortfolioService {
     required String symbol,
     required double quantity,
     required double averagePrice,
-  }) async {final normalizedSymbol = symbol.trim().toUpperCase();
+  }) async {
+    final normalizedSymbol =
+        symbol.trim().toUpperCase();
+
     final normalizedCompany = company.trim();
 
     if (normalizedSymbol.isEmpty ||
@@ -172,12 +262,12 @@ class PortfolioService {
       );
     }
 
-    final updated = List<PortfolioPosition>.from(
-      positions.value,
-    );
+    final updated =
+        List<PortfolioPosition>.from(positions.value);
 
     final existingIndex = updated.indexWhere(
-      (position) => position.symbol == normalizedSymbol,
+      (position) =>
+          position.symbol == normalizedSymbol,
     );
 
     final newPosition = PortfolioPosition(
@@ -206,7 +296,8 @@ class PortfolioService {
   }
 
   Future<void> removePosition(String symbol) async {
-    final normalizedSymbol = symbol.trim().toUpperCase();
+    final normalizedSymbol =
+        symbol.trim().toUpperCase();
 
     final updated = positions.value
         .where(
@@ -221,7 +312,8 @@ class PortfolioService {
   }
 
   PortfolioPosition? findPosition(String symbol) {
-    final normalizedSymbol = symbol.trim().toUpperCase();
+    final normalizedSymbol =
+        symbol.trim().toUpperCase();
 
     for (final position in positions.value) {
       if (position.symbol == normalizedSymbol) {
@@ -235,9 +327,8 @@ class PortfolioService {
   Future<void> _save() async {
     final encodedPositions = positions.value
         .map(
-          (position) => jsonEncode(
-            position.toJson(),
-          ),
+          (position) =>
+              jsonEncode(position.toJson()),
         )
         .toList();
 

@@ -4,6 +4,7 @@ import '../../shared/widgets/feature_tile.dart';
 import '../favorites/favorites_screen.dart';
 import '../market/market_screen.dart';
 import '../portfolio/portfolio_screen.dart';
+import '../transactions/transactions_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -91,22 +92,30 @@ class HomeScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const FavoritesScreen(),
+                          builder: (_) =>
+                              const FavoritesScreen(),
                         ),
                       );
                     },
                   ),
                   const SizedBox(width: 16),
                   FeatureTile(
-                    icon: Icons.analytics,
-                    title: 'Анализы',
-                    onTap: () {},
+                    icon: Icons.receipt_long,
+                    title: 'История',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              const TransactionsScreen(),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
+              Row(children: [
                   FeatureTile(
                     icon: Icons.public,
                     title: 'Рынок',
@@ -115,7 +124,8 @@ class HomeScreen extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (_) => const MarketScreen(),
-                        ),);
+                        ),
+                      );
                     },
                   ),
                   const SizedBox(width: 16),
@@ -126,7 +136,8 @@ class HomeScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const PortfolioScreen(),
+                          builder: (_) =>
+                              const PortfolioScreen(),
                         ),
                       );
                     },
