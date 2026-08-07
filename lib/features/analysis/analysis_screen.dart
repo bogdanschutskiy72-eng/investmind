@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'company_analysis_screen.dart';
+
 class AnalysisScreen extends StatelessWidget {
   const AnalysisScreen({super.key});
 
@@ -34,20 +36,26 @@ class AnalysisScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 28),
+
                 _AnalysisCard(
                   icon: Icons.business_outlined,
                   title: 'Анализ компании',
                   description:
-                      'Финансовые показатели, сильные стороны, '
-                      'риски и ключевые факторы роста.',
+                      'Финансовые показатели, движение цены, '
+                      'риски и ключевые рыночные сигналы.',
                   onTap: () {
-                    _showComingSoon(
+                    Navigator.push(
                       context,
-                      'Анализ компании',
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const CompanyAnalysisScreen(),
+                      ),
                     );
                   },
                 ),
+
                 const SizedBox(height: 16),
+
                 _AnalysisCard(
                   icon: Icons.account_balance_wallet_outlined,
                   title: 'Анализ портфеля',
@@ -61,7 +69,9 @@ class AnalysisScreen extends StatelessWidget {
                     );
                   },
                 ),
+
                 const SizedBox(height: 16),
+
                 _AnalysisCard(
                   icon: Icons.compare_arrows,
                   title: 'Сравнение компаний',
@@ -75,7 +85,9 @@ class AnalysisScreen extends StatelessWidget {
                     );
                   },
                 ),
+
                 const SizedBox(height: 16),
+
                 _AnalysisCard(
                   icon: Icons.psychology_outlined,
                   title: 'Спросить InvestMind',
@@ -89,7 +101,9 @@ class AnalysisScreen extends StatelessWidget {
                     );
                   },
                 ),
+
                 const SizedBox(height: 28),
+
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -105,10 +119,10 @@ class AnalysisScreen extends StatelessWidget {
                       ),
                       SizedBox(width: 14),
                       Expanded(
-                        child: Text(
-                          'ИИ InvestMind будет объяснять данные и риски, '
+                        child: Text('ИИ InvestMind будет объяснять данные и риски, '
                           'но не сможет самостоятельно совершать сделки '
-                          'или управлять деньгами пользователя.',style: TextStyle(
+                          'или управлять деньгами пользователя.',
+                          style: TextStyle(
                             height: 1.5,
                             color: Colors.white70,
                           ),
