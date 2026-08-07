@@ -3,17 +3,11 @@ import 'package:flutter/material.dart';
 import '../../shared/widgets/feature_tile.dart';
 
 class HomeScreen extends StatelessWidget {
-  final VoidCallback? onOpenFavorites;
-  final VoidCallback? onOpenTransactions;
-  final VoidCallback? onOpenMarket;
-  final VoidCallback? onOpenPortfolio;
+  final ValueChanged<int> onSelectPage;
 
   const HomeScreen({
     super.key,
-    this.onOpenFavorites,
-    this.onOpenTransactions,
-    this.onOpenMarket,
-    this.onOpenPortfolio,
+    required this.onSelectPage,
   });
 
   @override
@@ -90,13 +84,13 @@ class HomeScreen extends StatelessWidget {
                       FeatureTile(
                         icon: Icons.star,
                         title: 'Избранное',
-                        onTap: onOpenFavorites ?? () {},
+                        onTap: () => onSelectPage(3),
                       ),
                       const SizedBox(width: 16),
                       FeatureTile(
-                        icon: Icons.receipt_long,
-                        title: 'История',
-                        onTap: onOpenTransactions ?? () {},
+                        icon: Icons.psychology,
+                        title: 'Анализы',
+                        onTap: () => onSelectPage(5),
                       ),
                     ],
                   ),
@@ -106,12 +100,28 @@ class HomeScreen extends StatelessWidget {
                       FeatureTile(
                         icon: Icons.public,
                         title: 'Рынок',
-                        onTap: onOpenMarket ?? () {},
+                        onTap: () => onSelectPage(1),
                       ),
                       const SizedBox(width: 16),
-                      FeatureTile(icon: Icons.account_balance_wallet,
+                      FeatureTile(
+                        icon: Icons.account_balance_wallet,
                         title: 'Портфель',
-                        onTap: onOpenPortfolio ?? () {},
+                        onTap: () => onSelectPage(2),
+                      ),],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      FeatureTile(
+                        icon: Icons.receipt_long,
+                        title: 'История',
+                        onTap: () => onSelectPage(4),
+                      ),
+                      const SizedBox(width: 16),
+                      FeatureTile(
+                        icon: Icons.lightbulb_outline,
+                        title: 'InvestMind AI',
+                        onTap: () => onSelectPage(5),
                       ),
                     ],
                   ),

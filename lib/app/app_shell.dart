@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../features/analysis/analysis_screen.dart';
 import '../features/favorites/favorites_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/market/market_screen.dart';
@@ -25,15 +26,13 @@ class _AppShellState extends State<AppShell> {
   List<Widget> _buildPages() {
     return [
       HomeScreen(
-        onOpenMarket: () => _selectPage(1),
-        onOpenPortfolio: () => _selectPage(2),
-        onOpenFavorites: () => _selectPage(3),
-        onOpenTransactions: () => _selectPage(4),
+        onSelectPage: _selectPage,
       ),
       const MarketScreen(),
       const PortfolioScreen(),
       const FavoritesScreen(),
       const TransactionsScreen(),
+      const AnalysisScreen(),
     ];
   }
 
@@ -113,9 +112,9 @@ class _AppShellState extends State<AppShell> {
                       selectedIcon: Icon(
                         Icons.account_balance_wallet,
                       ),
-                      label: Text('Портфель'),),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.star_border),
+                      label: Text('Портфель'),
+                    ),
+                    NavigationRailDestination(icon: Icon(Icons.star_border),
                       selectedIcon: Icon(Icons.star),
                       label: Text('Избранное'),
                     ),
@@ -128,13 +127,24 @@ class _AppShellState extends State<AppShell> {
                       ),
                       label: Text('История'),
                     ),
+                    NavigationRailDestination(
+                      icon: Icon(
+                        Icons.psychology_outlined,
+                      ),
+                      selectedIcon: Icon(
+                        Icons.psychology,
+                      ),
+                      label: Text('Анализы'),
+                    ),
                   ],
                 ),
+
                 const VerticalDivider(
                   width: 1,
                   thickness: 1,
                   color: Color(0xFF1E293B),
                 ),
+
                 Expanded(
                   child: IndexedStack(
                     index: _selectedIndex,
@@ -180,11 +190,22 @@ class _AppShellState extends State<AppShell> {
                 label: 'Избранное',
               ),
               NavigationDestination(
-                icon: Icon(Icons.receipt_long_outlined),
+                icon: Icon(
+                  Icons.receipt_long_outlined,
+                ),
                 selectedIcon: Icon(
                   Icons.receipt_long,
                 ),
                 label: 'История',
+              ),
+              NavigationDestination(
+                icon: Icon(
+                  Icons.psychology_outlined,
+                ),
+                selectedIcon: Icon(
+                  Icons.psychology,
+                ),
+                label: 'Анализы',
               ),
             ],
           ),

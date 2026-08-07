@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 class FeatureTile extends StatelessWidget {
   final IconData icon;
   final String title;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
 
   const FeatureTile({
     super.key,
     required this.icon,
     required this.title,
-    this.onTap,
+    required this.onTap,
   });
 
   @override
@@ -35,6 +35,7 @@ class FeatureTile extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 title,
+                textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
