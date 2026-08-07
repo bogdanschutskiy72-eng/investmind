@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/company_profile_service.dart';
+import '../../services/historical_price_service.dart';
 import '../../services/stock_service.dart';
 
 class CompanyAnalysisScreen extends StatefulWidget {
@@ -14,6 +15,8 @@ class CompanyAnalysisScreen extends StatefulWidget {
 class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
   final StockService _stockService = StockService();
   final CompanyProfileService _profileService = CompanyProfileService();
+  final HistoricalPriceService _historicalPriceService =
+      HistoricalPriceService();
 
   final TextEditingController _symbolController =
       TextEditingController();
@@ -27,7 +30,8 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
   }
 
   void _analyzeCompany() {
-    final symbol = _symbolController.text.trim().toUpperCase();
+    final String symbol =
+        _symbolController.text.trim().toUpperCase();
 
     if (symbol.isEmpty) {
       return;
@@ -43,22 +47,34 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
   Future<_CompanyAnalysisData> _loadAnalysis(
     String symbol,
   ) async {
-    final results = await Future.wait([
+    final List<dynamic> results = await Future.wait<dynamic>([
       _stockService.fetchQuote(
         symbol,
         forceRefresh: true,
       ),
       _profileService.fetchProfile(symbol),
+      _historicalPriceService.fetchAnalysis(
+        symbol,
+        days: 90,
+      ),
     ]);
 
     return _CompanyAnalysisData(
       quote: results[0] as StockQuote,
       profile: results[1] as CompanyProfile,
+      historical:
+          results[2] as HistoricalPriceAnalysis,
     );
   }
 
   String _formatMoney(double value) {
     return '\$${value.toStringAsFixed(2)}';
+  }
+
+  String _formatPercent(double value) {
+    final String sign = value > 0 ? '+' : '';
+
+    return '$sign${value.toStringAsFixed(2)}%';
   }
 
   String _formatMarketCap(
@@ -69,21 +85,21 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
       return 'Нет данных';
     }
 
-    // Finnhub возвращает marketCapitalization в миллионах.
-    final absoluteValue = value * 1000000;
+    final double absoluteValue =
+        value * 1000000.0;
 
-    if (absoluteValue >= 1000000000000) {
-      return '${(absoluteValue / 1000000000000).toStringAsFixed(2)} '
+    if (absoluteValue >= 1000000000000.0) {
+      return '${(absoluteValue / 1000000000000.0).toStringAsFixed(2)} '
           'трлн $currency';
     }
 
-    if (absoluteValue >= 1000000000) {
-      return '${(absoluteValue / 1000000000).toStringAsFixed(2)} '
+    if (absoluteValue >= 1000000000.0) {
+      return '${(absoluteValue / 1000000000.0).toStringAsFixed(2)} '
           'млрд $currency';
     }
 
-    if (absoluteValue >= 1000000) {
-      return '${(absoluteValue / 1000000).toStringAsFixed(2)} '
+    if (absoluteValue >= 1000000.0) {
+      return '${(absoluteValue / 1000000.0).toStringAsFixed(2)} '
           'млн $currency';
     }
 
@@ -95,15 +111,15 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
       return 'Нет данных';
     }
 
-    // Finnhub возвращает shareOutstanding в миллионах акций.
-    final absoluteValue = value * 1000000;
+    final double absoluteValue =
+        value * 1000000.0;
 
-    if (absoluteValue >= 1000000000) {
-      return '${(absoluteValue / 1000000000).toStringAsFixed(2)} млрд';
+    if (absoluteValue >= 1000000000.0) {
+      return '${(absoluteValue / 1000000000.0).toStringAsFixed(2)} млрд';
     }
 
-    if (absoluteValue >= 1000000) {
-      return '${(absoluteValue / 1000000).toStringAsFixed(2)} млн';
+    if (absoluteValue >= 1000000.0) {
+      return '${(absoluteValue / 1000000.0).toStringAsFixed(2)} млн';
     }
 
     return absoluteValue.toStringAsFixed(0);
@@ -132,17 +148,18 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
   }
 
   String _buildRangeSummary(StockQuote quote) {
-    final range = quote.high - quote.low;
+    final double range =
+        quote.high - quote.low;
 
     if (range <= 0 || quote.currentPrice <= 0) {
       return 'Недостаточно данных для оценки диапазона.';
     }
 
-    final rangePercent = range / quote.currentPrice * 100;
+    final double rangePercent =
+        range / quote.currentPrice * 100.0;
 
     if (rangePercent >= 5) {
-      return 'Внутридневной диапазон высокий — '
-          'движение цены сегодня достаточно активное.';
+      return 'Внутридневной диапазон высокий — ''движение цены сегодня достаточно активное.';
     }
 
     if (rangePercent >= 2) {
@@ -153,6 +170,61 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
     return 'Внутридневной диапазон относительно спокойный.';
   }
 
+  String _buildTrendSummary(
+    HistoricalPriceAnalysis historical,
+  ) {
+    final double change =
+        historical.periodChangePercent;
+
+    if (change >= 20) {
+      return 'За последние 90 торговых дней акция '
+          'показала сильный восходящий тренд.';
+    }
+
+    if (change >= 5) {
+      return 'За последние 90 торговых дней наблюдается '
+          'умеренный восходящий тренд.';
+    }
+
+    if (change <= -20) {
+      return 'За последние 90 торговых дней акция '
+          'показала сильное снижение.';
+    }
+
+    if (change <= -5) {
+      return 'За последние 90 торговых дней наблюдается '
+          'умеренный нисходящий тренд.';
+    }
+
+    return 'За последние 90 торговых дней цена '
+        'двигалась преимущественно в боковом диапазоне.';
+  }
+
+  String _buildDrawdownSummary(
+    HistoricalPriceAnalysis historical,
+  ) {
+    final double drawdown =
+        historical.drawdownFromHighPercent.abs();
+
+    if (drawdown < 3) {
+      return 'Текущая цена находится близко к максимуму '
+          'рассматриваемого периода.';
+    }
+
+    if (drawdown < 10) {
+      return 'Цена находится примерно на '
+          '${drawdown.toStringAsFixed(1)}% ниже максимума периода.';
+    }
+
+    if (drawdown < 20) {
+      return 'Акция находится в заметной просадке — примерно '
+          '${drawdown.toStringAsFixed(1)}% от максимума периода.';
+    }
+
+    return 'Цена находится в глубокой просадке — примерно '
+        '${drawdown.toStringAsFixed(1)}% ниже максимума периода.';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -161,7 +233,8 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
       ),
       body: SafeArea(
         child: Center(
-          child: ConstrainedBox(constraints: const BoxConstraints(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
               maxWidth: 1100,
             ),
             child: ListView(
@@ -176,8 +249,8 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Введите тикер компании. InvestMind '
-                  'загрузит рыночные данные и профиль бизнеса.',
+                  'Рыночные данные, профиль бизнеса '
+                  'и историческое движение цены.',
                   style: TextStyle(
                     color: Colors.white60,
                     fontSize: 16,
@@ -192,14 +265,15 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                         controller: _symbolController,
                         textCapitalization:
                             TextCapitalization.characters,
-                        onSubmitted: (_) => _analyzeCompany(),
+                        onSubmitted: (_) =>
+                            _analyzeCompany(),
                         decoration: InputDecoration(
                           hintText: 'Например: NVDA',
-                          prefixIcon: const Icon(
-                            Icons.search,
-                          ),
+                          prefixIcon:
+                              const Icon(Icons.search),
                           filled: true,
-                          fillColor: const Color(0xFF1E293B),
+                          fillColor:
+                              const Color(0xFF1E293B),
                           border: OutlineInputBorder(
                             borderRadius:
                                 BorderRadius.circular(18),
@@ -212,9 +286,9 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                     ElevatedButton.icon(
                       onPressed: _analyzeCompany,
                       icon: const Icon(Icons.analytics),
-                      label: const Text('Анализировать'),
-                    ),
-                  ],
+                      label:
+                          const Text('Анализировать'),
+                    ),],
                 ),
 
                 const SizedBox(height: 28),
@@ -229,28 +303,38 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                           ConnectionState.waiting) {
                         return const Center(
                           child: Padding(
-                            padding: EdgeInsets.all(40),
-                            child: CircularProgressIndicator(),
+                            padding:
+                                EdgeInsets.all(40),
+                            child:
+                                CircularProgressIndicator(),
                           ),
                         );
                       }
 
                       if (snapshot.hasError) {
                         return _ErrorCard(
-                          message: snapshot.error.toString(),
+                          message:
+                              snapshot.error.toString(),
                         );
                       }
 
-                      final data = snapshot.data;
+                      final _CompanyAnalysisData? data =
+                          snapshot.data;
 
                       if (data == null) {
                         return const SizedBox.shrink();
                       }
 
-                      final quote = data.quote;
-                      final profile = data.profile;
+                      final StockQuote quote =
+                          data.quote;
 
-                      final positive =
+                      final CompanyProfile profile =
+                          data.profile;
+
+                      final HistoricalPriceAnalysis
+                          historical = data.historical;
+
+                      final bool positive =
                           quote.percentChange >= 0;
 
                       return Column(
@@ -259,29 +343,36 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                         children: [
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.all(22),
+                            padding:
+                                const EdgeInsets.all(22),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF1E293B),
+                              color:
+                                  const Color(0xFF1E293B),
                               borderRadius:
                                   BorderRadius.circular(20),
                             ),
                             child: Column(
-                              crossAxisAlignment:CrossAxisAlignment.start,
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   profile.name.isNotEmpty
                                       ? profile.name
                                       : profile.ticker,
-                                  style: const TextStyle(
+                                  style:
+                                      const TextStyle(
                                     fontSize: 24,
-                                    fontWeight: FontWeight.bold,
+                                    fontWeight:
+                                        FontWeight.bold,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   profile.ticker,
-                                  style: const TextStyle(
-                                    color: Colors.white54,
+                                  style:
+                                      const TextStyle(
+                                    color:
+                                        Colors.white54,
                                     fontSize: 16,
                                   ),
                                 ),
@@ -290,18 +381,21 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                                   _formatMoney(
                                     quote.currentPrice,
                                   ),
-                                  style: const TextStyle(
+                                  style:
+                                      const TextStyle(
                                     fontSize: 40,
-                                    fontWeight: FontWeight.bold,
+                                    fontWeight:
+                                        FontWeight.bold,
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  '${positive ? '+' : ''}'
-                                  '${quote.percentChange.toStringAsFixed(2)}%',
+                                const SizedBox(height: 8),Text(
+                                  _formatPercent(
+                                    quote.percentChange,
+                                  ),
                                   style: TextStyle(
                                     fontSize: 20,
-                                    fontWeight: FontWeight.bold,
+                                    fontWeight:
+                                        FontWeight.bold,
                                     color: positive
                                         ? Colors.greenAccent
                                         : Colors.redAccent,
@@ -336,7 +430,8 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                                 ),
                               ),
                               _MetricCard(
-                                title: 'Пред. закрытие',
+                                title:
+                                    'Пред. закрытие',
                                 value: _formatMoney(
                                   quote.previousClose,
                                 ),
@@ -347,10 +442,11 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                           const SizedBox(height: 30),
 
                           const Text(
-                            'Профиль компании',
+                            'История цены · 90 дней',
                             style: TextStyle(
                               fontSize: 22,
-                              fontWeight: FontWeight.bold,
+                              fontWeight:
+                                  FontWeight.bold,
                             ),
                           ),
 
@@ -359,42 +455,100 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                           Wrap(
                             spacing: 12,
                             runSpacing: 12,
-                            children: [_MetricCard(
-                                title: 'Капитализация',
+                            children: [
+                              _MetricCard(
+                                title:
+                                    'Изменение периода',
+                                value: _formatPercent(
+                                  historical
+                                      .periodChangePercent,
+                                ),
+                              ),
+                              _MetricCard(
+                                title:
+                                    'Максимум периода',
+                                value: _formatMoney(
+                                  historical.highestPrice,
+                                ),
+                              ),
+                              _MetricCard(
+                                title:
+                                    'Минимум периода',
+                                value: _formatMoney(
+                                  historical.lowestPrice,
+                                ),
+                              ),
+                              _MetricCard(
+                                title:
+                                    'От максимума',
+                                value: _formatPercent(
+                                  historical
+                                      .drawdownFromHighPercent,
+                                ),
+                              ),
+                            ],),
+
+                          const SizedBox(height: 30),
+
+                          const Text(
+                            'Профиль компании',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight:
+                                  FontWeight.bold,
+                            ),
+                          ),
+
+                          const SizedBox(height: 14),
+
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              _MetricCard(
+                                title:
+                                    'Капитализация',
                                 value: _formatMarketCap(
-                                  profile.marketCapitalization,
+                                  profile
+                                      .marketCapitalization,
                                   profile.currency,
                                 ),
                               ),
                               _MetricCard(
-                                title: 'Акций в обращении',
+                                title:
+                                    'Акций в обращении',
                                 value: _formatShares(
-                                  profile.shareOutstanding,
+                                  profile
+                                      .shareOutstanding,
                                 ),
                               ),
                               _MetricCard(
                                 title: 'Отрасль',
-                                value: profile.industry.isNotEmpty
+                                value: profile
+                                        .industry.isNotEmpty
                                     ? profile.industry
                                     : 'Нет данных',
                               ),
                               _MetricCard(
                                 title: 'Биржа',
-                                value: profile.exchange.isNotEmpty
+                                value: profile
+                                        .exchange.isNotEmpty
                                     ? profile.exchange
                                     : 'Нет данных',
                               ),
                               _MetricCard(
                                 title: 'Страна',
-                                value: profile.country.isNotEmpty
+                                value: profile
+                                        .country.isNotEmpty
                                     ? profile.country
                                     : 'Нет данных',
                               ),
                               _MetricCard(
                                 title: 'IPO',
-                                value: profile.ipo.isNotEmpty
-                                    ? profile.ipo
-                                    : 'Нет данных',
+                                value:
+                                    profile.ipo.isNotEmpty
+                                        ? profile.ipo
+                                        : 'Нет данных',
                               ),
                             ],
                           ),
@@ -405,32 +559,64 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                             'Вывод InvestMind',
                             style: TextStyle(
                               fontSize: 22,
-                              fontWeight: FontWeight.bold,
+                              fontWeight:
+                                  FontWeight.bold,
                             ),
                           ),
 
                           const SizedBox(height: 14),
 
                           _InsightCard(
-                            icon: Icons.trending_up_outlined,
-                            title: 'Движение цены',
-                            text: _buildPriceSummary(quote),
+                            icon:
+                                Icons.trending_up_outlined,
+                            title:
+                                'Сегодняшнее движение',
+                            text:
+                                _buildPriceSummary(quote),
                           ),
 
                           const SizedBox(height: 12),
 
                           _InsightCard(
-                            icon: Icons.show_chart_outlined,
-                            title: 'Волатильность',
-                            text: _buildRangeSummary(quote),
+                            icon:
+                                Icons.show_chart_outlined,
+                            title:
+                                'Волатильность сегодня',
+                            text:
+                                _buildRangeSummary(quote),
+                          ),
+
+                          const SizedBox(height: 12),_InsightCard(
+                            icon: Icons.timeline,
+                            title:
+                                'Среднесрочный тренд',
+                            text:
+                                _buildTrendSummary(
+                              historical,
+                            ),
                           ),
 
                           const SizedBox(height: 12),
 
                           _InsightCard(
-                            icon: Icons.business_outlined,
+                            icon:
+                                Icons.south_east_outlined,
+                            title:
+                                'Положение относительно максимума',
+                            text:
+                                _buildDrawdownSummary(
+                              historical,
+                            ),
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          _InsightCard(
+                            icon:
+                                Icons.business_outlined,
                             title: 'Компания',
-                            text: profile.industry.isNotEmpty
+                            text: profile
+                                    .industry.isNotEmpty
                                 ? '${profile.name} относится к отрасли '
                                     '${profile.industry}. '
                                     'Капитализация составляет примерно '
@@ -450,7 +636,8 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                             'продавать актив.',
                             style: TextStyle(
                               color: Colors.white38,
-                              fontSize: 13,),
+                              fontSize: 13,
+                            ),
                           ),
                         ],
                       );
@@ -468,10 +655,12 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
 class _CompanyAnalysisData {
   final StockQuote quote;
   final CompanyProfile profile;
+  final HistoricalPriceAnalysis historical;
 
   const _CompanyAnalysisData({
     required this.quote,
     required this.profile,
+    required this.historical,
   });
 }
 
@@ -532,8 +721,7 @@ class _ErrorCard extends StatelessWidget {
           const SizedBox(height: 12),
           const Text(
             'Не удалось получить данные',
-            style: TextStyle(
-              fontSize: 18,
+            style: TextStyle(fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -625,12 +813,15 @@ class _InsightCard extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: const TextStyle(fontSize: 17,
-                    fontWeight: FontWeight.bold,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight:
+                        FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 7),
