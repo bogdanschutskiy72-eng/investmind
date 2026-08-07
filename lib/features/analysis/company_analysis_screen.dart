@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/company_profile_service.dart';
 import '../../services/historical_price_service.dart';
 import '../../services/stock_service.dart';
+import '../../shared/widgets/historical_price_chart.dart';
 
 class CompanyAnalysisScreen extends StatefulWidget {
   const CompanyAnalysisScreen({super.key});
@@ -158,8 +159,8 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
     final double rangePercent =
         range / quote.currentPrice * 100.0;
 
-    if (rangePercent >= 5) {
-      return 'Внутридневной диапазон высокий — ''движение цены сегодня достаточно активное.';
+    if (rangePercent >= 5) {return 'Внутридневной диапазон высокий — '
+          'движение цены сегодня достаточно активное.';
     }
 
     if (rangePercent >= 2) {
@@ -286,9 +287,9 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                     ElevatedButton.icon(
                       onPressed: _analyzeCompany,
                       icon: const Icon(Icons.analytics),
-                      label:
-                          const Text('Анализировать'),
-                    ),],
+                      label:const Text('Анализировать'),
+                    ),
+                  ],
                 ),
 
                 const SizedBox(height: 28),
@@ -386,9 +387,9 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                                     fontSize: 40,
                                     fontWeight:
                                         FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),Text(
+                                  ),),
+                                const SizedBox(height: 8),
+                                Text(
                                   _formatPercent(
                                     quote.percentChange,
                                   ),
@@ -430,8 +431,7 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                                 ),
                               ),
                               _MetricCard(
-                                title:
-                                    'Пред. закрытие',
+                                title: 'Пред. закрытие',
                                 value: _formatMoney(
                                   quote.previousClose,
                                 ),
@@ -451,6 +451,12 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                           ),
 
                           const SizedBox(height: 14),
+
+                          HistoricalPriceChart(
+                            prices: historical.prices,
+                          ),
+
+                          const SizedBox(height: 18),
 
                           Wrap(
                             spacing: 12,
@@ -480,13 +486,13 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                               ),
                               _MetricCard(
                                 title:
-                                    'От максимума',
-                                value: _formatPercent(
+                                    'От максимума',value: _formatPercent(
                                   historical
                                       .drawdownFromHighPercent,
                                 ),
                               ),
-                            ],),
+                            ],
+                          ),
 
                           const SizedBox(height: 30),
 
@@ -580,13 +586,14 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                           _InsightCard(
                             icon:
                                 Icons.show_chart_outlined,
-                            title:
-                                'Волатильность сегодня',
+                            title:'Волатильность сегодня',
                             text:
                                 _buildRangeSummary(quote),
                           ),
 
-                          const SizedBox(height: 12),_InsightCard(
+                          const SizedBox(height: 12),
+
+                          _InsightCard(
                             icon: Icons.timeline,
                             title:
                                 'Среднесрочный тренд',
@@ -713,15 +720,15 @@ class _ErrorCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(
-            Icons.error_outline,
+          const Icon(Icons.error_outline,
             size: 42,
             color: Colors.redAccent,
           ),
           const SizedBox(height: 12),
           const Text(
             'Не удалось получить данные',
-            style: TextStyle(fontSize: 18,
+            style: TextStyle(
+              fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -804,7 +811,8 @@ class _InsightCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           Icon(
             icon,
