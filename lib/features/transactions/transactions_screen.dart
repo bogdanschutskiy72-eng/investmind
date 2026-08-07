@@ -30,6 +30,20 @@ class TransactionsScreen extends StatelessWidget {
     return '$day.$month.$year • $hour:$minute';
   }
 
+  double _totalRealizedProfit(
+    List<PortfolioTransaction> transactions,
+  ) {
+    double total = 0;
+
+    for (final transaction in transactions) {
+      if (transaction.type == TransactionType.sell) {
+        total += transaction.realizedProfit ?? 0;
+      }
+    }
+
+    return total;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -75,115 +89,196 @@ class TransactionsScreen extends StatelessWidget {
             );
           }
 
-          return ListView.separated(
+          final totalProfit =
+              _totalRealizedProfit(transactions);
+
+          final totalProfitPositive = totalProfit >= 0;
+
+          return ListView(
             padding: const EdgeInsets.all(24),
-            itemCount: transactions.length,
-            separatorBuilder: (_, _) =>
-                const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final transaction = transactions[index];
-
-              final isBuy =
-                  transaction.type == TransactionType.buy;
-
-              final operationTitle =
-                  isBuy ? 'Покупка' : 'Продажа';
-
-              final operationColor = isBuy
-                  ? const Color(0xFF20D3C2)
-                  : Colors.orangeAccent;
-
-              final operationIcon = isBuy
-                  ? Icons.add_shopping_cart
-                  : Icons.sell_outlined;
-
-              return Container(
-                padding: const EdgeInsets.all(18),
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: operationColor.withValues(
-                          alpha: 0.12,
-                        ),
-                        borderRadius:
-                            BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        operationIcon,
-                        color: operationColor,
+                    const Text(
+                      'Зафиксированный результат',
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontSize: 15,
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${transaction.company} • '
-                            '${transaction.symbol}',
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '$operationTitle • '
-                            '${_formatQuantity(transaction.quantity)} шт. '
-                            'по ${_formatMoney(transaction.price)}',
-                            style: TextStyle(
-                              color: operationColor,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _formatDate(
-                              transaction.createdAt,
-                            ),
-                            style: const TextStyle(
-                              color: Colors.white54,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
+                    const SizedBox(height: 10),
+                    Text(
+                      '${totalProfitPositive ? '+' : '-'}'
+                      '${_formatMoney(totalProfit.abs())}',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: totalProfitPositive
+                            ? Colors.greenAccent
+                            : Colors.redAccent,
+                      ),),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Прибыль и убыток по завершённым продажам',
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 13,
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          _formatMoney(
-                            transaction.totalAmount,
-                          ),
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          operationTitle,
-                          style: TextStyle(
-                            color: operationColor,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
-              );
-            },
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Все операции',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ...transactions.map(
+                (transaction) {
+                  final isBuy =
+                      transaction.type == TransactionType.buy;
+
+                  final operationTitle =
+                      isBuy ? 'Покупка' : 'Продажа';
+
+                  final operationColor = isBuy
+                      ? const Color(0xFF20D3C2)
+                      : Colors.orangeAccent;
+
+                  final operationIcon = isBuy
+                      ? Icons.add_shopping_cart
+                      : Icons.sell_outlined;
+
+                  final realizedProfit =
+                      transaction.realizedProfit;
+
+                  return Padding(
+                    padding:
+                        const EdgeInsets.only(bottom: 12),
+                    child: Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius:
+                            BorderRadius.circular(18),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color:
+                                      operationColor.withValues(
+                                    alpha: 0.12,
+                                  ),
+                                  borderRadius:
+                                      BorderRadius.circular(14),
+                                ),
+                                child: Icon(
+                                  operationIcon,
+                                  color: operationColor,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${transaction.company} • '
+                                      '${transaction.symbol}',
+                                      style: const TextStyle(
+                                        fontSize: 17,
+                                        fontWeight:
+                                            FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '$operationTitle • '
+                                      '${_formatQuantity(transaction.quantity)} шт. '
+                                      'по ${_formatMoney(transaction.price)}',
+                                      style: TextStyle(
+                                        color: operationColor,
+                                        fontWeight:
+                                            FontWeight.w600,
+                                      ),
+                                    ),const SizedBox(height: 6),
+                                    Text(
+                                      _formatDate(
+                                        transaction.createdAt,
+                                      ),
+                                      style: const TextStyle(
+                                        color: Colors.white54,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                _formatMoney(
+                                  transaction.totalAmount,
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (!isBuy &&
+                              realizedProfit != null) ...[
+                            const SizedBox(height: 14),
+                            const Divider(height: 1),
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                const Text(
+                                  'Результат продажи',
+                                  style: TextStyle(
+                                    color: Colors.white60,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Text(
+                                  '${realizedProfit >= 0 ? '+' : '-'}'
+                                  '${_formatMoney(realizedProfit.abs())}',
+                                  style: TextStyle(
+                                    color: realizedProfit >= 0
+                                        ? Colors.greenAccent
+                                        : Colors.redAccent,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
           );
         },
       ),
