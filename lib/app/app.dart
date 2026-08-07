@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../features/home/home_screen.dart';
+
+import 'app_shell.dart';
 
 class InvestMindApp extends StatelessWidget {
   const InvestMindApp({super.key});
@@ -17,7 +18,7 @@ class InvestMindApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      home: const HomeScreen(),
+      home: const AppShell(),
     );
   }
 }
