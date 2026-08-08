@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/company_profile_service.dart';
 import '../../services/historical_price_service.dart';
+import '../../services/investmind_score_service.dart';
 import '../../services/stock_service.dart';
 import '../../shared/widgets/historical_price_chart.dart';
 
@@ -13,11 +14,18 @@ class CompanyAnalysisScreen extends StatefulWidget {
       _CompanyAnalysisScreenState();
 }
 
-class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
+class _CompanyAnalysisScreenState
+    extends State<CompanyAnalysisScreen> {
   final StockService _stockService = StockService();
-  final CompanyProfileService _profileService = CompanyProfileService();
+
+  final CompanyProfileService _profileService =
+      CompanyProfileService();
+
   final HistoricalPriceService _historicalPriceService =
       HistoricalPriceService();
+
+  final InvestMindScoreService _scoreService =
+      const InvestMindScoreService();
 
   final TextEditingController _symbolController =
       TextEditingController();
@@ -48,7 +56,8 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
   Future<_CompanyAnalysisData> _loadAnalysis(
     String symbol,
   ) async {
-    final List<dynamic> results = await Future.wait<dynamic>([
+    final List<dynamic> results =
+        await Future.wait<dynamic>([
       _stockService.fetchQuote(
         symbol,
         forceRefresh: true,
@@ -78,11 +87,19 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
     return '$sign${value.toStringAsFixed(2)}%';
   }
 
+  String _formatDrawdown(double value) {
+    if (value <= 0.0) {
+      return '0.00%';
+    }
+
+    return '-${value.toStringAsFixed(2)}%';
+  }
+
   String _formatMarketCap(
     double value,
     String currency,
   ) {
-    if (value <= 0) {
+    if (value <= 0.0) {
       return 'Нет данных';
     }
 
@@ -108,7 +125,7 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
   }
 
   String _formatShares(double value) {
-    if (value <= 0) {
+    if (value <= 0.0) {
       return 'Нет данных';
     }
 
@@ -126,44 +143,51 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
     return absoluteValue.toStringAsFixed(0);
   }
 
-  String _buildPriceSummary(StockQuote quote) {
-    if (quote.percentChange > 2) {
+  String _buildPriceSummary(
+    StockQuote quote,
+  ) {
+    if (quote.percentChange > 2.0) {
       return 'Акция показывает заметный рост в текущем '
           'торговом периоде.';
     }
 
-    if (quote.percentChange > 0) {
+    if (quote.percentChange > 0.0) {
       return 'Цена находится в умеренно положительной зоне.';
     }
 
-    if (quote.percentChange < -2) {
+    if (quote.percentChange < -2.0) {
       return 'Акция показывает заметное снижение. '
           'Стоит изучить причины движения цены.';
     }
 
-    if (quote.percentChange < 0) {
+    if (quote.percentChange < 0.0) {
       return 'Цена находится в умеренно отрицательной зоне.';
     }
 
     return 'Цена практически не изменилась.';
   }
 
-  String _buildRangeSummary(StockQuote quote) {
+  String _buildRangeSummary(StockQuote quote,
+  ) {
     final double range =
         quote.high - quote.low;
 
-    if (range <= 0 || quote.currentPrice <= 0) {
+    if (range <= 0.0 ||
+        quote.currentPrice <= 0.0) {
       return 'Недостаточно данных для оценки диапазона.';
     }
 
     final double rangePercent =
-        range / quote.currentPrice * 100.0;
+        range /
+            quote.currentPrice *
+            100.0;
 
-    if (rangePercent >= 5) {return 'Внутридневной диапазон высокий — '
+    if (rangePercent >= 5.0) {
+      return 'Внутридневной диапазон высокий — '
           'движение цены сегодня достаточно активное.';
     }
 
-    if (rangePercent >= 2) {
+    if (rangePercent >= 2.0) {
       return 'Наблюдается умеренная внутридневная '
           'волатильность.';
     }
@@ -177,22 +201,22 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
     final double change =
         historical.periodChangePercent;
 
-    if (change >= 20) {
+    if (change >= 20.0) {
       return 'За последние 90 торговых дней акция '
           'показала сильный восходящий тренд.';
     }
 
-    if (change >= 5) {
+    if (change >= 5.0) {
       return 'За последние 90 торговых дней наблюдается '
           'умеренный восходящий тренд.';
     }
 
-    if (change <= -20) {
+    if (change <= -20.0) {
       return 'За последние 90 торговых дней акция '
           'показала сильное снижение.';
     }
 
-    if (change <= -5) {
+    if (change <= -5.0) {
       return 'За последние 90 торговых дней наблюдается '
           'умеренный нисходящий тренд.';
     }
@@ -207,17 +231,17 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
     final double drawdown =
         historical.drawdownFromHighPercent.abs();
 
-    if (drawdown < 3) {
+    if (drawdown < 3.0) {
       return 'Текущая цена находится близко к максимуму '
           'рассматриваемого периода.';
     }
 
-    if (drawdown < 10) {
+    if (drawdown < 10.0) {
       return 'Цена находится примерно на '
           '${drawdown.toStringAsFixed(1)}% ниже максимума периода.';
     }
 
-    if (drawdown < 20) {
+    if (drawdown < 20.0) {
       return 'Акция находится в заметной просадке — примерно '
           '${drawdown.toStringAsFixed(1)}% от максимума периода.';
     }
@@ -226,11 +250,146 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
         '${drawdown.toStringAsFixed(1)}% ниже максимума периода.';
   }
 
+  String _buildVolatilitySummary(
+    HistoricalPriceAnalysis historical,
+  ) {
+    final double volatility =
+        historical.annualizedVolatilityPercent;
+
+    if (volatility < 20.0) {
+      return 'Историческая волатильность относительно низкая — '
+          '${volatility.toStringAsFixed(1)}% годовых.';
+    }
+
+    if (volatility < 35.0) {
+      return 'Историческая волатильность умеренная — '
+          '${volatility.toStringAsFixed(1)}% годовых.';
+    }
+
+    if (volatility < 50.0) {
+      return 'Историческая волатильность повышенная — '
+          '${volatility.toStringAsFixed(1)}% годовых.';
+    }
+
+    return 'Историческая волатильность высокая — '
+        '${volatility.toStringAsFixed(1)}% годовых. '
+        'Цена может совершать значительные движения.';
+  }
+
+  String _buildMovingAverageSummary(
+    HistoricalPriceAnalysis historical,
+  ) {
+    final double price =
+        historical.lastPrice;
+
+    final double ma20 =
+        historical.movingAverage20;
+
+    final double ma50 =
+        historical.movingAverage50;
+
+    if (price > ma20 && price > ma50) {
+      return 'Цена находится выше средних MA20 и MA50. '
+          'Это указывает на положительную среднесрочную структуру цены.';
+    }
+
+    if (price < ma20 && price < ma50) {
+      return 'Цена находится ниже MA20 и MA50. '
+          'Среднесрочная структура сейчас выглядит слабее.';
+    }
+
+    if (price > ma20 && price < ma50) {
+      return 'Цена выше MA20, но пока ниже MA50. '
+          'Краткосрочное восстановление ещё не подтверждено '
+          'более длинным трендом.';
+    }
+
+    return 'Цена ниже MA20, но остаётся выше MA50. '
+        'Возможна краткосрочная коррекция внутри более '
+        'устойчивого среднесрочного движения.';
+  }
+
+  String _buildTrendStrengthSummary(
+    HistoricalPriceAnalysis historical,
+  ) {
+    final double strength =
+        historical.trendStrengthPercent;
+
+    final double slope =
+        historical.trendSlopePercentPerDay;
+
+    final String direction;
+
+    if (slope > 0.02) {
+      direction = 'восходящего';
+    } else if (slope < -0.02) {
+      direction = 'нисходящего';
+    } else {
+      direction = 'бокового';
+    }
+
+    if (strength >= 70.0) {
+      return 'Статистическая сила $direction тренда высокая — '
+          '${strength.toStringAsFixed(1)}%. '
+          'Цена достаточно последовательно движется '
+          'в выбранном направлении.';
+    }
+
+    if (strength >= 40.0) {
+      return 'Сила $direction тренда умеренная — '
+          '${strength.toStringAsFixed(1)}%.';
+    }
+
+    if (strength >= 20.0) {
+      return 'Сила тренда невысокая — '
+          '${strength.toStringAsFixed(1)}%. '
+          'В движении присутствует заметный рыночный шум.';
+    }
+
+    return 'Выраженного устойчивого тренда сейчас нет. '
+        'Статистическая сила составляет только '
+        '${strength.toStringAsFixed(1)}%.';
+  }
+
+  String _buildRiskSummary(
+    HistoricalPriceAnalysis historical,
+  ) {
+    final double volatility =
+        historical.annualizedVolatilityPercent;
+
+    final double drawdown =
+        historical.maxDrawdownPercent;
+
+    if (volatility >= 50.0 &&
+        drawdown >= 20.0) {
+      return 'Риск движения цены высокий: одновременно наблюдаются '
+          'высокая волатильность и значительная максимальная просадка.';
+    }
+
+    if (volatility >= 35.0 ||
+        drawdown >= 20.0) {
+      return 'Риск движения цены повышенный. '
+          'При анализе позиции стоит учитывать возможность '
+          'существенных колебаний.';
+    }
+
+    if (volatility < 25.0 &&
+        drawdown < 10.0) {
+      return 'По историческому движению риск выглядит относительно '
+          'умеренным, хотя это не исключает будущих резких движений.';
+    }
+
+    return 'Исторический риск находится в среднем диапазоне. '
+        'Важно учитывать волатильность вместе с размером позиции.';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Анализ компании'),
+        title: const Text(
+          'Анализ компании',
+        ),
       ),
       body: SafeArea(
         child: Center(
@@ -250,163 +409,241 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Рыночные данные, профиль бизнеса '
-                  'и историческое движение цены.',
+                  'Рыночные данные, профиль бизнеса, '
+                  'история цены и количественный анализ.',
                   style: TextStyle(
                     color: Colors.white60,
                     fontSize: 16,
                   ),
                 ),
                 const SizedBox(height: 24),
-
                 Row(
                   children: [
                     Expanded(
                       child: TextField(
-                        controller: _symbolController,
+                        controller:
+                            _symbolController,
                         textCapitalization:
                             TextCapitalization.characters,
                         onSubmitted: (_) =>
                             _analyzeCompany(),
                         decoration: InputDecoration(
-                          hintText: 'Например: NVDA',
+                          hintText:
+                              'Например: NVDA',
                           prefixIcon:
-                              const Icon(Icons.search),
+                              const Icon(
+                            Icons.search,
+                          ),
                           filled: true,
                           fillColor:
-                              const Color(0xFF1E293B),
-                          border: OutlineInputBorder(
+                              const Color(
+                            0xFF1E293B,
+                          ),
+                          border:
+                              OutlineInputBorder(
                             borderRadius:
-                                BorderRadius.circular(18),
-                            borderSide: BorderSide.none,
+                                BorderRadius.circular(
+                              18,
+                            ),borderSide:
+                                BorderSide.none,
                           ),
                         ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     ElevatedButton.icon(
-                      onPressed: _analyzeCompany,
-                      icon: const Icon(Icons.analytics),
-                      label:const Text('Анализировать'),
+                      onPressed:
+                          _analyzeCompany,
+                      icon: const Icon(
+                        Icons.analytics,
+                      ),
+                      label: const Text(
+                        'Анализировать',
+                      ),
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 28),
-
                 if (_analysisFuture == null)
                   const _EmptyAnalysis()
                 else
-                  FutureBuilder<_CompanyAnalysisData>(
-                    future: _analysisFuture,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState ==
-                          ConnectionState.waiting) {
+                  FutureBuilder<
+                      _CompanyAnalysisData>(
+                    future:
+                        _analysisFuture,
+                    builder:
+                        (context, snapshot) {
+                      if (snapshot
+                              .connectionState ==
+                          ConnectionState
+                              .waiting) {
                         return const Center(
                           child: Padding(
                             padding:
-                                EdgeInsets.all(40),
+                                EdgeInsets.all(
+                              40,
+                            ),
                             child:
                                 CircularProgressIndicator(),
                           ),
                         );
                       }
 
-                      if (snapshot.hasError) {
+                      if (snapshot
+                          .hasError) {
                         return _ErrorCard(
-                          message:
-                              snapshot.error.toString(),
+                          message: snapshot
+                              .error
+                              .toString(),
                         );
                       }
 
-                      final _CompanyAnalysisData? data =
+                      final _CompanyAnalysisData?
+                          data =
                           snapshot.data;
 
                       if (data == null) {
-                        return const SizedBox.shrink();
+                        return const SizedBox
+                            .shrink();
                       }
 
                       final StockQuote quote =
                           data.quote;
 
-                      final CompanyProfile profile =
+                      final CompanyProfile
+                          profile =
                           data.profile;
 
                       final HistoricalPriceAnalysis
-                          historical = data.historical;
+                          historical =
+                          data.historical;
+
+                      final InvestMindScoreResult
+                          scoreResult =
+                          _scoreService.calculate(
+                        currentPrice:
+                            quote.currentPrice,
+                        movingAverage20:
+                            historical
+                                .movingAverage20,
+                        movingAverage50:
+                            historical
+                                .movingAverage50,
+                        volatilityPercent:
+                            historical
+                                .annualizedVolatilityPercent,
+                        maxDrawdownPercent:
+                            historical
+                                .maxDrawdownPercent,
+                        trendStrengthPercent:
+                            historical
+                                .trendStrengthPercent,
+                        trendSlopePercentPerDay:
+                            historical
+                                .trendSlopePercentPerDay,
+                      );
 
                       final bool positive =
-                          quote.percentChange >= 0;
+                          quote
+                                  .percentChange >=
+                              0.0;
 
                       return Column(
                         crossAxisAlignment:
-                            CrossAxisAlignment.start,
+                            CrossAxisAlignment
+                                .start,
                         children: [
                           Container(
-                            width: double.infinity,
-                            padding:
-                                const EdgeInsets.all(22),
-                            decoration: BoxDecoration(
+                            width:
+                                double.infinity,padding:
+                                const EdgeInsets
+                                    .all(22),
+                            decoration:
+                                BoxDecoration(
                               color:
-                                  const Color(0xFF1E293B),
+                                  const Color(
+                                0xFF1E293B,
+                              ),
                               borderRadius:
-                                  BorderRadius.circular(20),
+                                  BorderRadius
+                                      .circular(
+                                20,
+                              ),
                             ),
                             child: Column(
                               crossAxisAlignment:
-                                  CrossAxisAlignment.start,
+                                  CrossAxisAlignment
+                                      .start,
                               children: [
                                 Text(
-                                  profile.name.isNotEmpty
-                                      ? profile.name
-                                      : profile.ticker,
+                                  profile.name
+                                          .isNotEmpty
+                                      ? profile
+                                          .name
+                                      : profile
+                                          .ticker,
                                   style:
                                       const TextStyle(
                                     fontSize: 24,
                                     fontWeight:
-                                        FontWeight.bold,
+                                        FontWeight
+                                            .bold,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
+                                const SizedBox(
+                                  height: 4,
+                                ),
                                 Text(
                                   profile.ticker,
                                   style:
                                       const TextStyle(
-                                    color:
-                                        Colors.white54,
+                                    color: Colors
+                                        .white54,
                                     fontSize: 16,
                                   ),
                                 ),
-                                const SizedBox(height: 16),
+                                const SizedBox(
+                                  height: 16,
+                                ),
                                 Text(
                                   _formatMoney(
-                                    quote.currentPrice,
+                                    quote
+                                        .currentPrice,
                                   ),
                                   style:
                                       const TextStyle(
                                     fontSize: 40,
                                     fontWeight:
-                                        FontWeight.bold,
-                                  ),),
-                                const SizedBox(height: 8),
+                                        FontWeight
+                                            .bold,
+                                  ),
+                                ),
+                                const SizedBox(
+                                  height: 8,
+                                ),
                                 Text(
                                   _formatPercent(
-                                    quote.percentChange,
+                                    quote
+                                        .percentChange,
                                   ),
-                                  style: TextStyle(
+                                  style:
+                                      TextStyle(
                                     fontSize: 20,
                                     fontWeight:
-                                        FontWeight.bold,
+                                        FontWeight
+                                            .bold,
                                     color: positive
-                                        ? Colors.greenAccent
-                                        : Colors.redAccent,
+                                        ? Colors
+                                            .greenAccent
+                                        : Colors
+                                            .redAccent,
                                   ),
                                 ),
                               ],
                             ),
+                          ),const SizedBox(
+                            height: 20,
                           ),
-
-                          const SizedBox(height: 20),
 
                           Wrap(
                             spacing: 12,
@@ -439,7 +676,9 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                             ],
                           ),
 
-                          const SizedBox(height: 30),
+                          const SizedBox(
+                            height: 30,
+                          ),
 
                           const Text(
                             'История цены · 90 дней',
@@ -450,13 +689,18 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                             ),
                           ),
 
-                          const SizedBox(height: 14),
-
-                          HistoricalPriceChart(
-                            prices: historical.prices,
+                          const SizedBox(
+                            height: 14,
                           ),
 
-                          const SizedBox(height: 18),
+                          HistoricalPriceChart(
+                            prices:
+                                historical.prices,
+                          ),
+
+                          const SizedBox(
+                            height: 18,
+                          ),
 
                           Wrap(
                             spacing: 12,
@@ -465,7 +709,8 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                               _MetricCard(
                                 title:
                                     'Изменение периода',
-                                value: _formatPercent(
+                                value:
+                                    _formatPercent(
                                   historical
                                       .periodChangePercent,
                                 ),
@@ -473,20 +718,26 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                               _MetricCard(
                                 title:
                                     'Максимум периода',
-                                value: _formatMoney(
-                                  historical.highestPrice,
+                                value:
+                                    _formatMoney(
+                                  historical
+                                      .highestPrice,
                                 ),
                               ),
                               _MetricCard(
                                 title:
                                     'Минимум периода',
-                                value: _formatMoney(
-                                  historical.lowestPrice,
+                                value:
+                                    _formatMoney(
+                                  historical
+                                      .lowestPrice,
                                 ),
                               ),
                               _MetricCard(
                                 title:
-                                    'От максимума',value: _formatPercent(
+                                    'От максимума',
+                                value:
+                                    _formatPercent(
                                   historical
                                       .drawdownFromHighPercent,
                                 ),
@@ -494,7 +745,78 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                             ],
                           ),
 
-                          const SizedBox(height: 30),
+                          const SizedBox(
+                            height: 30,),
+
+                          const Text(
+                            'Количественный анализ',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight:
+                                  FontWeight.bold,
+                            ),
+                          ),
+
+                          const SizedBox(
+                            height: 14,
+                          ),
+
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              _MetricCard(
+                                title:
+                                    'Волатильность',
+                                value:
+                                    '${historical.annualizedVolatilityPercent.toStringAsFixed(2)}%',
+                              ),
+                              _MetricCard(
+                                title:
+                                    'Макс. просадка',
+                                value:
+                                    _formatDrawdown(
+                                  historical
+                                      .maxDrawdownPercent,
+                                ),
+                              ),
+                              _MetricCard(
+                                title: 'MA20',
+                                value:
+                                    _formatMoney(
+                                  historical
+                                      .movingAverage20,
+                                ),
+                              ),
+                              _MetricCard(
+                                title: 'MA50',
+                                value:
+                                    _formatMoney(
+                                  historical
+                                      .movingAverage50,
+                                ),
+                              ),
+                              _MetricCard(
+                                title:
+                                    'Сила тренда',
+                                value:
+                                    '${historical.trendStrengthPercent.toStringAsFixed(1)}%',
+                              ),
+                              _MetricCard(
+                                title:
+                                    'Тренд / день',
+                                value:
+                                    _formatPercent(
+                                  historical
+                                      .trendSlopePercentPerDay,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(
+                            height: 30,
+                          ),
 
                           const Text(
                             'Профиль компании',
@@ -505,7 +827,9 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                             ),
                           ),
 
-                          const SizedBox(height: 14),
+                          const SizedBox(
+                            height: 14,
+                          ),
 
                           Wrap(
                             spacing: 12,
@@ -514,16 +838,17 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                               _MetricCard(
                                 title:
                                     'Капитализация',
-                                value: _formatMarketCap(
+                                value:
+                                    _formatMarketCap(
                                   profile
                                       .marketCapitalization,
                                   profile.currency,
                                 ),
                               ),
                               _MetricCard(
-                                title:
-                                    'Акций в обращении',
-                                value: _formatShares(
+                                title:'Акций в обращении',
+                                value:
+                                    _formatShares(
                                   profile
                                       .shareOutstanding,
                                 ),
@@ -531,35 +856,223 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                               _MetricCard(
                                 title: 'Отрасль',
                                 value: profile
-                                        .industry.isNotEmpty
+                                        .industry
+                                        .isNotEmpty
                                     ? profile.industry
                                     : 'Нет данных',
                               ),
                               _MetricCard(
                                 title: 'Биржа',
                                 value: profile
-                                        .exchange.isNotEmpty
+                                        .exchange
+                                        .isNotEmpty
                                     ? profile.exchange
                                     : 'Нет данных',
                               ),
                               _MetricCard(
                                 title: 'Страна',
                                 value: profile
-                                        .country.isNotEmpty
+                                        .country
+                                        .isNotEmpty
                                     ? profile.country
                                     : 'Нет данных',
                               ),
                               _MetricCard(
                                 title: 'IPO',
-                                value:
-                                    profile.ipo.isNotEmpty
-                                        ? profile.ipo
-                                        : 'Нет данных',
+                                value: profile
+                                        .ipo
+                                        .isNotEmpty
+                                    ? profile.ipo
+                                    : 'Нет данных',
                               ),
                             ],
                           ),
 
-                          const SizedBox(height: 30),
+                          const SizedBox(
+                            height: 30,
+                          ),
+
+                          const Text(
+                            'InvestMind Score',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight:
+                                  FontWeight.bold,
+                            ),
+                          ),
+
+                          const SizedBox(
+                            height: 14,
+                          ),
+
+                          Container(
+                            width:
+                                double.infinity,
+                            padding:
+                                const EdgeInsets
+                                    .all(24),
+                            decoration:
+                                BoxDecoration(
+                              color:
+                                  const Color(
+                                0xFF1E293B,
+                              ),
+                              borderRadius:
+                                  BorderRadius
+                                      .circular(
+                                20,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment
+                                      .start,
+                              children: [
+                                Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment
+                                          .end,
+                                  children: [
+                                    Text(
+                                      '${scoreResult.score}',
+                                      style:
+                                          const TextStyle(
+                                        fontSize: 48,
+                                        fontWeight:
+                                            FontWeight
+                                                .bold,color:
+                                            Color(
+                                          0xFF20D3C2,
+                                        ),
+                                      ),
+                                    ),
+                                    const Padding(
+                                      padding:
+                                          EdgeInsets
+                                              .only(
+                                        left: 6,
+                                        bottom: 7,
+                                      ),
+                                      child: Text(
+                                        '/ 100',
+                                        style:
+                                            TextStyle(
+                                          fontSize:
+                                              18,
+                                          color: Colors
+                                              .white54,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                const SizedBox(
+                                  height: 8,
+                                ),
+
+                                Text(
+                                  scoreResult
+                                      .rating,
+                                  style:
+                                      const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight:
+                                        FontWeight
+                                            .bold,
+                                  ),
+                                ),
+
+                                const SizedBox(
+                                  height: 18,
+                                ),
+
+                                if (scoreResult
+                                    .strengths
+                                    .isNotEmpty) ...[
+                                  const Text(
+                                    'Сильные стороны',
+                                    style:
+                                        TextStyle(
+                                      fontWeight:
+                                          FontWeight
+                                              .bold,
+                                      color: Colors
+                                          .greenAccent,
+                                    ),
+                                  ),
+                                  const SizedBox(
+                                    height: 8,
+                                  ),
+                                  ...scoreResult
+                                      .strengths
+                                      .map(
+                                    (item) =>
+                                        Padding(
+                                      padding:
+                                          const EdgeInsets
+                                              .only(
+                                        bottom: 6,
+                                      ),
+                                      child: Text(
+                                        '✓ $item',
+                                        style:
+                                            const TextStyle(
+                                          color: Colors
+                                              .white70,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+
+                                if (scoreResult
+                                    .warnings
+                                    .isNotEmpty) ...[
+                                  const SizedBox(
+                                    height: 14,),
+                                  const Text(
+                                    'Риски',
+                                    style:
+                                        TextStyle(
+                                      fontWeight:
+                                          FontWeight
+                                              .bold,
+                                      color: Colors
+                                          .orangeAccent,
+                                    ),
+                                  ),
+                                  const SizedBox(
+                                    height: 8,
+                                  ),
+                                  ...scoreResult
+                                      .warnings
+                                      .map(
+                                    (item) =>
+                                        Padding(
+                                      padding:
+                                          const EdgeInsets
+                                              .only(
+                                        bottom: 6,
+                                      ),
+                                      child: Text(
+                                        '⚠ $item',
+                                        style:
+                                            const TextStyle(
+                                          color: Colors
+                                              .white70,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(
+                            height: 30,
+                          ),
 
                           const Text(
                             'Вывод InvestMind',
@@ -570,28 +1083,39 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                             ),
                           ),
 
-                          const SizedBox(height: 14),
+                          const SizedBox(
+                            height: 14,
+                          ),
 
                           _InsightCard(
-                            icon:
-                                Icons.trending_up_outlined,
+                            icon: Icons
+                                .trending_up_outlined,
                             title:
                                 'Сегодняшнее движение',
                             text:
-                                _buildPriceSummary(quote),
+                                _buildPriceSummary(
+                              quote,
+                            ),
                           ),
 
-                          const SizedBox(height: 12),
+                          const SizedBox(
+                            height: 12,
+                          ),
 
                           _InsightCard(
-                            icon:
-                                Icons.show_chart_outlined,
-                            title:'Волатильность сегодня',
+                            icon: Icons
+                                .show_chart_outlined,
+                            title:
+                                'Волатильность сегодня',
                             text:
-                                _buildRangeSummary(quote),
+                                _buildRangeSummary(
+                              quote,
+                            ),
                           ),
 
-                          const SizedBox(height: 12),
+                          const SizedBox(
+                            height: 12,
+                          ),
 
                           _InsightCard(
                             icon: Icons.timeline,
@@ -603,27 +1127,91 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                             ),
                           ),
 
-                          const SizedBox(height: 12),
+                          const SizedBox(
+                            height: 12,
+                          ),
 
                           _InsightCard(
-                            icon:
-                                Icons.south_east_outlined,
-                            title:
-                                'Положение относительно максимума',
+                            icon: Icons
+                                .south_east_outlined,
+                            title:'Положение относительно максимума',
                             text:
                                 _buildDrawdownSummary(
                               historical,
                             ),
                           ),
 
-                          const SizedBox(height: 12),
+                          const SizedBox(
+                            height: 12,
+                          ),
 
                           _InsightCard(
                             icon:
-                                Icons.business_outlined,
+                                Icons.speed_outlined,
+                            title:
+                                'Историческая волатильность',
+                            text:
+                                _buildVolatilitySummary(
+                              historical,
+                            ),
+                          ),
+
+                          const SizedBox(
+                            height: 12,
+                          ),
+
+                          _InsightCard(
+                            icon:
+                                Icons.moving_outlined,
+                            title:
+                                'MA20 / MA50',
+                            text:
+                                _buildMovingAverageSummary(
+                              historical,
+                            ),
+                          ),
+
+                          const SizedBox(
+                            height: 12,
+                          ),
+
+                          _InsightCard(
+                            icon: Icons
+                                .query_stats_outlined,
+                            title:
+                                'Сила тренда',
+                            text:
+                                _buildTrendStrengthSummary(
+                              historical,
+                            ),
+                          ),
+
+                          const SizedBox(
+                            height: 12,
+                          ),
+
+                          _InsightCard(
+                            icon: Icons
+                                .shield_outlined,
+                            title:
+                                'Риск движения цены',
+                            text:
+                                _buildRiskSummary(
+                              historical,
+                            ),
+                          ),
+
+                          const SizedBox(
+                            height: 12,
+                          ),
+
+                          _InsightCard(
+                            icon: Icons
+                                .business_outlined,
                             title: 'Компания',
                             text: profile
-                                    .industry.isNotEmpty
+                                    .industry
+                                    .isNotEmpty
                                 ? '${profile.name} относится к отрасли '
                                     '${profile.industry}. '
                                     'Капитализация составляет примерно '
@@ -635,14 +1223,32 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                                     'но отраслевые данные отсутствуют.',
                           ),
 
-                          const SizedBox(height: 20),
+                          const SizedBox(
+                            height: 20,
+                          ),
+
+                          const Text(
+                            'InvestMind Score пока оценивает техническое '
+                            'состояние цены и исторический риск. '
+                            'Фундаментальная оценка бизнеса будет '
+                            'добавлена отдельно.',
+                            style: TextStyle(
+                              color:
+                                  Colors.white38,
+                              fontSize: 13,
+                              height: 1.4,
+                            ),
+                          ),const SizedBox(
+                            height: 8,
+                          ),
 
                           const Text(
                             'Это аналитическая информация, '
                             'а не рекомендация покупать или '
                             'продавать актив.',
                             style: TextStyle(
-                              color: Colors.white38,
+                              color:
+                                  Colors.white38,
                               fontSize: 13,
                             ),
                           ),
@@ -720,7 +1326,8 @@ class _ErrorCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(Icons.error_outline,
+          const Icon(
+            Icons.error_outline,
             size: 42,
             color: Colors.redAccent,
           ),
@@ -768,7 +1375,8 @@ class _MetricCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           Text(
             title,
@@ -805,8 +1413,7 @@ class _InsightCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.all(20),decoration: BoxDecoration(
         color: const Color(0xFF1E293B),
         borderRadius: BorderRadius.circular(18),
       ),
