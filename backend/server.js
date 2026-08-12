@@ -23,10 +23,14 @@ app.post('/api/analyze', async (req, res) => {
   try {
     const data = req.body;
 
-    if (!data || !data.symbol) {
+    if (
+      !data ||
+      !data.company ||
+      !data.company.symbol
+    ) {
       return res.status(400).json({
         status: 'error',
-        message: 'Не передан symbol',
+        message: 'Не передан company.symbol',
       });
     }
 
@@ -34,30 +38,112 @@ app.post('/api/analyze', async (req, res) => {
       model: 'gpt-5.6',
 
       instructions: `
-Ты — аналитический модуль InvestMind.
+Ты — аналитический модуль InvestMind Deep Analysis.
 
-Твоя задача — объяснить пользователю переданные
-количественные показатели акции.
+Тебе передаются структурированные данные компании:
+
+company:
+- symbol
+- name
+- industry
+- marketCapitalization
+
+market:
+- currentPrice
+- dailyChangePercent
+
+technical:
+- изменение цены за период
+- волатильность
+- максимальная просадка
+- MA20
+- MA50
+- сила тренда
+- наклон тренда
+- Technical Score
+- технические сильные стороны и риски
+
+fundamental:
+- P/E
+- Forward P/E
+- P/S
+- EPS
+- рост EPS
+- рост выручки
+- валовая маржа
+- чистая маржа
+- ROE
+- Current Ratio
+- Beta
+- 52-недельный максимум и минимум
+- Fundamental Score
+- Growth Score
+- Profitability Score
+- Valuation Score
+- Financial Health Score
+- Fundamental Risk Score
+- фундаментальные сильные стороны и риски
+
+investMind:
+- итоговый Combined Score
+- общий рейтинг
+- веса Technical и Fundamental
+
+Твоя задача — сделать единый анализ компании,
+объединяя техническое состояние акции
+и фундаментальное состояние бизнеса.
 
 Правила:
 
 1. Используй только переданные данные.
-2. Не выдумывай новости, отчётность или фундаментальные показатели.
+2. Не выдумывай новости, отчётность, прогнозы аналитиков
+   или любые отсутствующие показатели.
 3. Не давай прямых рекомендаций покупать или продавать.
 4. Не обещай будущую доходность.
-5. Учитывай, что InvestMind Score пока является
-   технической оценкой, а не полной оценкой бизнеса.
-6. Пиши простым и понятным русским языком.
-7. Не используй Markdown.
-8. Не добавляй поля, которых нет в заданной структуре.
+5. Отделяй сильный бизнес от дорогой оценки.
+6. Высокий рост не должен автоматически означать хорошую оценку.
+7. Высокий P/E или P/S рассматривай как риск оценки,
+   особенно если valuationScore низкий.
+8. Высокую Beta и волатильность учитывай как рыночный риск.
+9. Technical Score и Fundamental Score могут противоречить друг другу.
+   Если это происходит — обязательно объясни конфликт.
+10. Combined Score используй как итоговую количественную оценку,
+    но не повторяй его механически.
+11. Пиши простым, понятным русским языком.
+12. Не используй Markdown.
+13. Не добавляй поля, которых нет в заданной JSON-структуре.
 
-Поле confidence показывает уверенность именно
-в качестве технического вывода на основании переданных данных.
+summary:
+Дай краткий общий вывод о бизнесе, оценке,
+технической картине и риске.
 
-Не завышай confidence, если:
-- сила тренда низкая;
-- волатильность высокая;
-- показатели противоречат друг другу.
+strengths:
+Выбери наиболее важные сильные стороны
+из технических и фундаментальных данных.
+
+risks:
+Выбери наиболее важные риски.
+Особое внимание уделяй дорогой оценке,
+низкой прибыльности, слабому тренду,
+волатильности и высокой Beta.
+
+watch:
+Укажи конкретные показатели,
+за которыми инвестору стоит следить дальше.
+
+confidence:
+Показывает уверенность в качестве общего анализа
+на основании полноты и согласованности переданных данных.
+
+Снижай confidence, если:
+- Technical и Fundamental Score сильно расходятся;
+- технические сигналы противоречат друг другу;
+- valuationScore очень низкий при сильном росте;
+- волатильность или Beta очень высокие;
+- часть фундаментальных показателей отсутствует или равна 0.
+
+Не повышай confidence только потому,
+что Combined Score высокий.
 `,
 
       input: JSON.stringify(data, null, 2),
@@ -65,7 +151,7 @@ app.post('/api/analyze', async (req, res) => {
       text: {
         format: {
           type: 'json_schema',
-          name: 'investmind_analysis',
+          name: 'investmind_deep_analysis',
           strict: true,
 
           schema: {
@@ -91,8 +177,7 @@ app.post('/api/analyze', async (req, res) => {
               },
 
               watch: {
-                type: 'array',
-                items: {
+                type: 'array', items: {
                   type: 'string',
                 },
               },
@@ -123,12 +208,12 @@ app.post('/api/analyze', async (req, res) => {
     );
 
     console.log(
-     `I анализ выполнен для ${ data.symbol }`
+     `Deep Analysis выполнен для ${ data.company.symbol }`,
     );
 
     res.json({
       status: 'ok',
-      message: 'InvestMind AI завершил анализ',
+      message: 'InvestMind Deep Analysis завершён',
       analysis: analysis,
     });
   } catch (error) {
@@ -141,7 +226,7 @@ app.post('/api/analyze', async (req, res) => {
       status: 'error',
       message:
         error?.message ??
-        'Не удалось выполнить AI-анализ',
+        'Не удалось выполнить Deep Analysis',
     });
   }
 });

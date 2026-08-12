@@ -530,7 +530,10 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                             quote: quote,
                             profile: profile,
                             historical: historical,
-                            score: scoreResult,
+                            fundamentals: fundamentals!,
+                            technicalScore: scoreResult,
+                            fundamentalScore: fundamentalScore!,
+                            combinedScore: combinedScore!,
                           );
 
                       final bool positive = quote.percentChange >= 0.0;
@@ -759,7 +762,7 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                           ),
 
                           const SizedBox(height: 30),
-                          if (fundamentalScore != null) ...[
+                          ...[
                             const SizedBox(height: 24),
 
                             Container(
@@ -927,7 +930,7 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
 
                           const SizedBox(height: 14),
 
-                          if (fundamentals != null && fundamentals.hasAnyData)
+                          if (fundamentals.hasAnyData)
                             Wrap(
                               spacing: 12,
                               runSpacing: 12,
@@ -1039,7 +1042,7 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                      '${combinedScore?.score ?? scoreResult.score}',
+                                      '${scoreResult.score}',
                                       style: const TextStyle(
                                         fontSize: 48,
                                         fontWeight: FontWeight.bold,
@@ -1064,7 +1067,7 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                                 const SizedBox(height: 10),
 
                                 Text(
-                                  combinedScore?.rating ?? 'Техническая оценка',
+                                  combinedScore.rating,
                                   style: const TextStyle(
                                     color: Colors.white70,
                                     fontSize: 16,
@@ -1074,33 +1077,32 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
 
                                 const SizedBox(height: 16),
 
-                                if (combinedScore != null)
-                                  Wrap(
-                                    spacing: 12,
-                                    runSpacing: 12,
-                                    children: [
-                                      _MetricCard(
-                                        title: 'Technical',
-                                        value:
-                                            '${combinedScore.technicalScore}/100',
-                                      ),
-                                      _MetricCard(
-                                        title: 'Fundamental',
-                                        value:
-                                            '${combinedScore.fundamentalScore}/100',
-                                      ),
-                                      _MetricCard(
-                                        title: 'Вес Technical',
-                                        value:
-                                            '${(combinedScore.technicalWeight * 100).toStringAsFixed(0)}%',
-                                      ),
-                                      _MetricCard(
-                                        title: 'Вес Fundamental',
-                                        value:
-                                            '${(combinedScore.fundamentalWeight * 100).toStringAsFixed(0)}%',
-                                      ),
-                                    ],
-                                  ),
+                                Wrap(
+                                  spacing: 12,
+                                  runSpacing: 12,
+                                  children: [
+                                    _MetricCard(
+                                      title: 'Technical',
+                                      value:
+                                          '${combinedScore.technicalScore}/100',
+                                    ),
+                                    _MetricCard(
+                                      title: 'Fundamental',
+                                      value:
+                                          '${combinedScore.fundamentalScore}/100',
+                                    ),
+                                    _MetricCard(
+                                      title: 'Вес Technical',
+                                      value:
+                                          '${(combinedScore.technicalWeight * 100).toStringAsFixed(0)}%',
+                                    ),
+                                    _MetricCard(
+                                      title: 'Вес Fundamental',
+                                      value:
+                                          '${(combinedScore.fundamentalWeight * 100).toStringAsFixed(0)}%',
+                                    ),
+                                  ],
+                                ),
                                 const SizedBox(height: 16),
 
                                 ElevatedButton.icon(
