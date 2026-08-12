@@ -1336,11 +1336,11 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
 
                                             Text(
                                               _aiAnalysis!.confidence >= 75
-                                                  ? 'Высокая уверенность в техническом сигнале'
+                                                  ? 'Высокая уверенность в комплексном анализе'
                                                   : _aiAnalysis!.confidence >=
                                                         50
-                                                  ? 'Средняя уверенность — сигналы неоднозначны'
-                                                  : 'Низкая уверенность — требуется осторожная интерпретация',
+                                                  ? 'Средняя уверенность — данные частично противоречат друг другу'
+                                                  : 'Низкая уверенность — вывод требует осторожной интерпретации',
                                               style: const TextStyle(
                                                 color: Colors.white54,
                                                 fontSize: 12,
@@ -1353,51 +1353,6 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                                   ),
                                 ],
                                 const SizedBox(height: 18),
-
-                                if (scoreResult.strengths.isNotEmpty) ...[
-                                  const Text(
-                                    'Сильные стороны',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.greenAccent,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  ...scoreResult.strengths.map(
-                                    (item) => Padding(
-                                      padding: const EdgeInsets.only(bottom: 6),
-                                      child: Text(
-                                        '✓ $item',
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-
-                                if (scoreResult.warnings.isNotEmpty) ...[
-                                  const SizedBox(height: 14),
-                                  const Text(
-                                    'Риски',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.orangeAccent,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  ...scoreResult.warnings.map(
-                                    (item) => Padding(
-                                      padding: const EdgeInsets.only(bottom: 6),
-                                      child: Text(
-                                        '⚠ $item',
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
                               ],
                             ),
                           ),
