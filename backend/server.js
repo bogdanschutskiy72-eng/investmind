@@ -34,13 +34,35 @@ app.post('/api/analyze', async (req, res) => {
       });
     }
 
-    const response = await openai.responses.create({
-      model: 'gpt-5.6',
+    if (
+      !data.investMind ||
+      typeof data.investMind.confidenceScore !== 'number'
+    ) {
+      return res.status(400).json({
+        status: 'error',
+        message:
+          'Не передан investMind.confidenceScore',
+      });
+    }
 
-      instructions: `
+    const confidenceScore = Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(
+          data.investMind.confidenceScore,
+        ),
+      ),
+    );
+
+    const response =
+      await openai.responses.create({
+        model: 'gpt-5.6',
+
+        instructions: `
 Ты — аналитический модуль InvestMind Deep Analysis.
 
-Тебе передаются структурированные данные компании:
+Тебе передаются структурированные данные компании.
 
 company:
 - symbol
@@ -61,7 +83,8 @@ technical:
 - сила тренда
 - наклон тренда
 - Technical Score
-- технические сильные стороны и риски
+- технические сильные стороны
+- технические риски
 
 fundamental:
 - P/E
@@ -74,146 +97,255 @@ fundamental:
 - чистая маржа
 - ROE
 - Current Ratio
+- Quick Ratio
+- Debt/Equity
+- Free Cash Flow per Share
 - Beta
-- 52-недельный максимум и минимум
+- 52-недельный максимум
+- 52-недельный минимум
 - Fundamental Score
 - Growth Score
 - Profitability Score
 - Valuation Score
 - Financial Health Score
 - Fundamental Risk Score
-- фундаментальные сильные стороны и риски
+- полнота фундаментальных данных
+- фундаментальные сильные стороны
+- фундаментальные риски
 
 investMind:
-- итоговый Combined Score
+- Combined Score
 - общий рейтинг
-- веса Technical и Fundamental
+- фактический вес Technical
+- фактический вес Fundamental
+- Confidence Score
 
 Твоя задача — сделать единый анализ компании,
-объединяя техническое состояние акции
-и фундаментальное состояние бизнеса.
+объединяя техническое состояние акции,
+фундаментальное состояние бизнеса,
+качество доступных данных
+и итоговую оценку InvestMind.
+
+ВАЖНО:
+
+Confidence Score уже рассчитан системой InvestMind.
+
+Ты НЕ рассчитываешь Confidence самостоятельно.
+Ты НЕ изменяешь Confidence Score.
+Ты НЕ предлагаешь другой процент уверенности.
+
+Confidence Score является системным показателем
+достоверности анализа и будет добавлен backend
+после завершения AI-анализа.
 
 Правила:
 
 1. Используй только переданные данные.
-2. Не выдумывай новости, отчётность, прогнозы аналитиков
-   или любые отсутствующие показатели.
-3. Не давай прямых рекомендаций покупать или продавать.
-4. Не обещай будущую доходность.
-5. Отделяй сильный бизнес от дорогой оценки.
-6. Высокий рост не должен автоматически означать хорошую оценку.
-7. Высокий P/E или P/S рассматривай как риск оценки,
-   особенно если valuationScore низкий.
-8. Высокую Beta и волатильность учитывай как рыночный риск.
-9. Technical Score и Fundamental Score могут противоречить друг другу.
-   Если это происходит — обязательно объясни конфликт.
-10. Combined Score используй как итоговую количественную оценку,
-    но не повторяй его механически.
-11. Пиши простым, понятным русским языком.
-12. Не используй Markdown.
-13. Не добавляй поля, которых нет в заданной JSON-структуре.
+
+2. Не выдумывай новости, отчётность,
+прогнозы аналитиков или отсутствующие показатели.
+
+3. Если показатель равен null,
+считай его отсутствующим.
+
+4. Никогда не трактуй null как 0.
+
+5. Не давай прямых рекомендаций
+покупать или продавать акции.
+
+6. Не обещай будущую доходность.
+
+7. Отделяй качество бизнеса
+от рыночной оценки акции.
+
+8. Высокий рост бизнеса
+не означает автоматически хорошую оценку акции.
+
+9. Высокий P/E или P/S рассматривай
+как риск оценки,
+особенно если Valuation Score низкий.
+
+10. Низкие мультипликаторы
+при отрицательной прибыли
+не считай автоматически признаком дешевизны.
+
+11. Высокую Beta, волатильность
+и большую максимальную просадку
+учитывай как рыночный риск.
+
+12. Technical Score и Fundamental Score
+могут противоречить друг другу.
+
+Если между ними есть существенный разрыв,
+обязательно объясни его.
+
+13. Combined Score используй
+как итоговую количественную оценку,
+но не повторяй его механически.
+
+14. Учитывай фактические веса
+Technical и Fundamental,
+переданные в investMind.
+
+15. Если полнота фундаментальных данных
+ограничена,
+обязательно учитывай это
+при формулировке выводов.
+
+16. Отсутствие данных
+не является автоматически негативным фактором.
+
+Нужно писать:
+"показатель отсутствует"
+или
+"по доступным данным оценить нельзя".
+
+17. Не превращай отсутствие Free Cash Flow,
+P/E, EPS Growth или другой метрики
+в отрицательное значение.
+
+18. Пиши простым,понятным русским языком.
+
+19. Не используй Markdown.
+
+20. Не добавляй поля,
+которых нет в заданной JSON-структуре.
 
 summary:
-Дай краткий общий вывод о бизнесе, оценке,
-технической картине и риске.
+Дай краткий общий вывод о:
+- качестве бизнеса;
+- оценке акции;
+- технической картине;
+- основных рисках;
+- согласованности Technical и Fundamental.
 
 strengths:
-Выбери наиболее важные сильные стороны
-из технических и фундаментальных данных.
+Выбери наиболее значимые сильные стороны.
+Не перечисляй слабые или отсутствующие данные
+как сильные стороны.
 
 risks:
-Выбери наиболее важные риски.
-Особое внимание уделяй дорогой оценке,
-низкой прибыльности, слабому тренду,
-волатильности и высокой Beta.
+Выбери наиболее важные реальные риски.
+
+Особое внимание уделяй:
+- дорогой оценке;
+- отрицательной прибыльности;
+- высокому долгу;
+- слабой ликвидности;
+- слабой технической структуре;
+- высокой Beta;
+- высокой волатильности;
+- большой исторической просадке.
+
+Отсутствующий показатель
+можно упомянуть как ограничение анализа,
+но не как доказанный риск бизнеса.
 
 watch:
 Укажи конкретные показатели,
 за которыми инвестору стоит следить дальше.
 
-confidence:
-Показывает уверенность в качестве общего анализа
-на основании полноты и согласованности переданных данных.
+Если какой-то важный показатель отсутствует,
+можно указать его появление
+как предмет дальнейшего наблюдения.
 
-Снижай confidence, если:
-- Technical и Fundamental Score сильно расходятся;
-- технические сигналы противоречат друг другу;
-- valuationScore очень низкий при сильном росте;
-- волатильность или Beta очень высокие;
-- часть фундаментальных показателей отсутствует или равна 0.
-
-Не повышай confidence только потому,
-что Combined Score высокий.
+Не рассчитывай и не возвращай Confidence.
 `,
 
-      input: JSON.stringify(data, null, 2),
+        input: JSON.stringify(
+          data,
+          null,
+          2,
+        ),
 
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'investmind_deep_analysis',
-          strict: true,
+        text: {
+          format: {
+            type: 'json_schema',
+            name: 'investmind_deep_analysis',
+            strict: true,
 
-          schema: {
-            type: 'object',
+            schema: {
+              type: 'object',
 
-            properties: {
-              summary: {
-                type: 'string',
-              },
-
-              strengths: {
-                type: 'array',
-                items: {
+              properties: {
+                summary: {
                   type: 'string',
+                },
+
+                strengths: {
+                  type: 'array',
+                  items: {
+                    type: 'string',
+                  },
+                },
+
+                risks: {
+                  type: 'array',
+                  items: {
+                    type: 'string',
+                  },
+                },
+
+                watch: {
+                  type: 'array',
+                  items: {
+                    type: 'string',
+                  },
                 },
               },
 
-              risks: {
-                type: 'array',
-                items: {
-                  type: 'string',
-                },
-              },
+              required: [
+                'summary',
+                'strengths',
+                'risks',
+                'watch',
+              ],
 
-              watch: {
-                type: 'array', items: {
-                  type: 'string',
-                },
-              },
-
-              confidence: {
-                type: 'integer',
-                minimum: 0,
-                maximum: 100,
-              },
+              additionalProperties: false,
             },
-
-            required: [
-              'summary',
-              'strengths',
-              'risks',
-              'watch',
-              'confidence',
-            ],
-
-            additionalProperties: false,
           },
         },
-      },
-    });
+      });
 
-    const analysis = JSON.parse(
+    const parsedAnalysis = JSON.parse(
       response.output_text,
     );
 
+    const analysis = {
+      summary:
+        parsedAnalysis.summary ?? '',
+      strengths:
+        Array.isArray(
+          parsedAnalysis.strengths,
+        )
+          ? parsedAnalysis.strengths
+          : [],
+      risks:
+        Array.isArray(
+          parsedAnalysis.risks,
+        )
+          ? parsedAnalysis.risks
+          : [],
+      watch:
+        Array.isArray(
+          parsedAnalysis.watch,
+        )
+          ? parsedAnalysis.watch
+          : [],
+
+      // Единственный официальный Confidence
+      // приходит из InvestMind.
+      confidence: confidenceScore,
+    };
+
     console.log(
-     `Deep Analysis выполнен для ${ data.company.symbol }`,
+      `Deep Analysis выполнен для ${data.company.symbol} | Confidence: ${confidenceScore} %`
     );
 
     res.json({
       status: 'ok',
-      message: 'InvestMind Deep Analysis завершён',
+      message:
+        'InvestMind Deep Analysis завершён',
       analysis: analysis,
     });
   } catch (error) {
@@ -233,6 +365,6 @@ confidence:
 
 app.listen(PORT, () => {
   console.log(
-    `InvestMind Backend запущен на порту ${ PORT }`,
+    `InvestMind Backend запущен на порту ${PORT}`,
   );
 });

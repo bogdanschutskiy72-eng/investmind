@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/confidence_score_service.dart';
 import '../../services/combined_score_service.dart';
 import '../../services/fundamental_score_service.dart';
 import '../../services/fundamental_service.dart';
@@ -39,6 +40,9 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
 
   final AiAnalysisService _aiAnalysisService = const AiAnalysisService();
 
+  final ConfidenceScoreService _confidenceScoreService =
+      const ConfidenceScoreService();
+
   Future<_CompanyAnalysisData>? _analysisFuture;
 
   AiStructuredAnalysis? _aiAnalysis;
@@ -60,6 +64,7 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
     FocusScope.of(context).unfocus();
 
     setState(() {
+      _aiAnalysis = null;
       _analysisFuture = _loadAnalysis(symbol);
     });
   }
@@ -456,6 +461,7 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                       if (fundamentals != null && fundamentals.hasAnyData) {
                         fundamentalScore = _fundamentalScoreService.calculate(
                           fundamentals,
+                          industry: profile.industry,
                         );
                       }
                       if (historical == null) {
@@ -518,10 +524,20 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                           );
                       CombinedScoreResult? combinedScore;
 
-                      if (fundamentalScore != null) {
+                      if (fundamentalScore != null && fundamentals != null) {
                         combinedScore = _combinedScoreService.calculate(
                           technical: scoreResult,
                           fundamental: fundamentalScore,
+                          fundamentalData: fundamentals,
+                        );
+                      }
+                      ConfidenceScoreResult? confidenceScore;
+
+                      if (combinedScore != null && fundamentals != null) {
+                        confidenceScore = _confidenceScoreService.calculate(
+                          fundamentals: fundamentals,
+                          historical: historical,
+                          combinedScore: combinedScore,
                         );
                       }
 
@@ -534,6 +550,7 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                             technicalScore: scoreResult,
                             fundamentalScore: fundamentalScore!,
                             combinedScore: combinedScore!,
+                            confidenceScore: confidenceScore!.score,
                           );
 
                       final bool positive = quote.percentChange >= 0.0;
@@ -1042,7 +1059,7 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                      '${scoreResult.score}',
+                                      '${combinedScore.score}',
                                       style: const TextStyle(
                                         fontSize: 48,
                                         fontWeight: FontWeight.bold,
@@ -1100,6 +1117,16 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
                                       title: 'Вес Fundamental',
                                       value:
                                           '${(combinedScore.fundamentalWeight * 100).toStringAsFixed(0)}%',
+                                    ),
+                                    _MetricCard(
+                                      title: 'Полнота данных',
+                                      value:
+                                          '${combinedScore.fundamentalDataCompleteness}%',
+                                    ),
+
+                                    _MetricCard(
+                                      title: 'Достоверность',
+                                      value: '${confidenceScore.score}%',
                                     ),
                                   ],
                                 ),

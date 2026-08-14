@@ -30,19 +30,22 @@ class AiCompanyAnalysisInput {
   final double trendSlopePercentPerDay;
 
   // Fundamental
-  final double pe;
-  final double forwardPe;
-  final double priceToSales;
-  final double eps;
-  final double epsGrowthPercent;
-  final double revenueGrowthPercent;
-  final double grossMarginPercent;
-  final double netMarginPercent;
-  final double roePercent;
-  final double currentRatio;
-  final double beta;
-  final double week52High;
-  final double week52Low;
+  final double? pe;
+  final double? forwardPe;
+  final double? priceToSales;
+  final double? eps;
+  final double? epsGrowthPercent;
+  final double? revenueGrowthPercent;
+  final double? grossMarginPercent;
+  final double? netMarginPercent;
+  final double? roePercent;
+  final double? currentRatio;
+  final double? quickRatio;
+  final double? debtToEquity;
+  final double? freeCashFlowPerShare;
+  final double? beta;
+  final double? week52High;
+  final double? week52Low;
 
   // Scores
   final int technicalScore;
@@ -54,6 +57,14 @@ class AiCompanyAnalysisInput {
   final int valuationScore;
   final int financialHealthScore;
   final int fundamentalRiskScore;
+
+  // InvestMind reliability
+  final int fundamentalDataCompleteness;
+  final int confidenceScore;
+
+  // Dynamic weights
+  final double technicalWeight;
+  final double fundamentalWeight;
 
   final String combinedRating;
 
@@ -87,6 +98,9 @@ class AiCompanyAnalysisInput {
     required this.netMarginPercent,
     required this.roePercent,
     required this.currentRatio,
+    required this.quickRatio,
+    required this.debtToEquity,
+    required this.freeCashFlowPerShare,
     required this.beta,
     required this.week52High,
     required this.week52Low,
@@ -98,6 +112,10 @@ class AiCompanyAnalysisInput {
     required this.valuationScore,
     required this.financialHealthScore,
     required this.fundamentalRiskScore,
+    required this.fundamentalDataCompleteness,
+    required this.confidenceScore,
+    required this.technicalWeight,
+    required this.fundamentalWeight,
     required this.combinedRating,
     required this.technicalStrengths,
     required this.technicalWarnings,
@@ -113,12 +131,10 @@ class AiCompanyAnalysisInput {
         'industry': industry,
         'marketCapitalization': marketCapitalization,
       },
-
       'market': {
         'currentPrice': currentPrice,
         'dailyChangePercent': dailyChangePercent,
       },
-
       'technical': {
         'periodChangePercent': periodChangePercent,
         'volatilityPercent': volatilityPercent,
@@ -131,17 +147,20 @@ class AiCompanyAnalysisInput {
         'strengths': technicalStrengths,
         'warnings': technicalWarnings,
       },
-
       'fundamental': {
         'pe': pe,
         'forwardPe': forwardPe,
         'priceToSales': priceToSales,
         'eps': eps,
         'epsGrowthPercent': epsGrowthPercent,
-        'revenueGrowthPercent': revenueGrowthPercent,'grossMarginPercent': grossMarginPercent,
+        'revenueGrowthPercent': revenueGrowthPercent,
+        'grossMarginPercent': grossMarginPercent,
         'netMarginPercent': netMarginPercent,
         'roePercent': roePercent,
         'currentRatio': currentRatio,
+        'quickRatio': quickRatio,
+        'debtToEquity': debtToEquity,
+        'freeCashFlowPerShare': freeCashFlowPerShare,
         'beta': beta,
         'week52High': week52High,
         'week52Low': week52Low,
@@ -151,15 +170,16 @@ class AiCompanyAnalysisInput {
         'valuationScore': valuationScore,
         'financialHealthScore': financialHealthScore,
         'riskScore': fundamentalRiskScore,
+        'dataCompletenessPercent': fundamentalDataCompleteness,
         'strengths': fundamentalStrengths,
         'warnings': fundamentalWarnings,
       },
-
       'investMind': {
         'combinedScore': combinedScore,
         'rating': combinedRating,
-        'technicalWeight': 0.40,
-        'fundamentalWeight': 0.60,
+        'technicalWeight': technicalWeight,
+        'fundamentalWeight': fundamentalWeight,
+        'confidenceScore': confidenceScore,
       },
     };
   }
@@ -180,43 +200,25 @@ class AiStructuredAnalysis {
     required this.confidence,
   });
 
-  factory AiStructuredAnalysis.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory AiStructuredAnalysis.fromJson(Map<String, dynamic> json) {
     return AiStructuredAnalysis(
       summary: json['summary']?.toString() ?? '',
-      strengths: _stringListFrom(
-        json['strengths'],
-      ),
-      risks: _stringListFrom(
-        json['risks'],
-      ),
-      watch: _stringListFrom(
-        json['watch'],
-      ),
-      confidence: _intFrom(
-        json['confidence'],
-      ),
+      strengths: _stringListFrom(json['strengths']),
+      risks: _stringListFrom(json['risks']),
+      watch: _stringListFrom(json['watch']),
+      confidence: _intFrom(json['confidence']),
     );
   }
 
-  static List<String> _stringListFrom(
-    dynamic value,
-  ) {
+  static List<String> _stringListFrom(dynamic value) {
     if (value is! List) {
       return [];
     }
 
-    return value
-        .map(
-          (item) => item.toString(),
-        )
-        .toList();
+    return value.map((item) => item.toString()).toList();
   }
 
-  static int _intFrom(
-    dynamic value,
-  ) {
+  static int _intFrom(dynamic value) {
     if (value is int) {
       return value;
     }
@@ -225,10 +227,7 @@ class AiStructuredAnalysis {
       return value.toInt();
     }
 
-    return int.tryParse(
-          value?.toString() ?? '',
-        ) ??
-        0;
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 }
 
@@ -243,32 +242,21 @@ class AiBackendResponse {
     required this.analysis,
   });
 
-  factory AiBackendResponse.fromJson(
-    Map<String, dynamic> json,
-  ) {
-    final dynamic rawAnalysis =
-        json['analysis'];
+  factory AiBackendResponse.fromJson(Map<String, dynamic> json) {
+    final dynamic rawAnalysis = json['analysis'];
 
     if (rawAnalysis is! Map) {
-      throw Exception(
-        'Backend вернул некорректный AI-анализ.',
-      );
+      throw Exception('Backend вернул некорректный AI-анализ.');
     }
 
-    final Map<String, dynamic> analysisData =
-        Map<String, dynamic>.from(
+    final Map<String, dynamic> analysisData = Map<String, dynamic>.from(
       rawAnalysis,
     );
 
     return AiBackendResponse(
-      status:
-          json['status']?.toString() ?? '',
-      message:
-          json['message']?.toString() ?? '',
-      analysis:
-          AiStructuredAnalysis.fromJson(
-        analysisData,
-      ),
+      status: json['status']?.toString() ?? '',
+      message: json['message']?.toString() ?? '',
+      analysis: AiStructuredAnalysis.fromJson(analysisData),
     );
   }
 }
@@ -276,8 +264,7 @@ class AiBackendResponse {
 class AiAnalysisService {
   const AiAnalysisService();
 
-  static const String _backendBaseUrl =
-      'http://localhost:3000';
+  static const String _backendBaseUrl = 'http://localhost:3000';
 
   AiCompanyAnalysisInput buildCompanyInput({
     required StockQuote quote,
@@ -287,147 +274,136 @@ class AiAnalysisService {
     required InvestMindScoreResult technicalScore,
     required FundamentalScoreResult fundamentalScore,
     required CombinedScoreResult combinedScore,
+    required int confidenceScore,
   }) {
     return AiCompanyAnalysisInput(
       symbol: profile.ticker,
       companyName: profile.name,
       industry: profile.industry,
 
-      currentPrice:
-          quote.currentPrice,
-      dailyChangePercent:
-          quote.percentChange,
-      marketCapitalization:
-          profile.marketCapitalization,
+      // Market
+      currentPrice: quote.currentPrice,
+      dailyChangePercent: quote.percentChange,
+      marketCapitalization: profile.marketCapitalization,
 
-      periodChangePercent:
-          historical.periodChangePercent,
-      volatilityPercent:
-          historical.annualizedVolatilityPercent,
-      maxDrawdownPercent:
-          historical.maxDrawdownPercent,
-      movingAverage20:
-          historical.movingAverage20,
-      movingAverage50:
-          historical.movingAverage50,
-      trendStrengthPercent:
-          historical.trendStrengthPercent,trendSlopePercentPerDay:
-          historical.trendSlopePercentPerDay,
+      // Technical
+      periodChangePercent: historical.periodChangePercent,
+      volatilityPercent: historical.annualizedVolatilityPercent,
+      maxDrawdownPercent: historical.maxDrawdownPercent,
+      movingAverage20: historical.movingAverage20,
+      movingAverage50: historical.movingAverage50,
+      trendStrengthPercent: historical.trendStrengthPercent,
+      trendSlopePercentPerDay: historical.trendSlopePercentPerDay,
 
-      pe: fundamentals.pe,
-      forwardPe:
-          fundamentals.forwardPe,
-      priceToSales:
-          fundamentals.priceToSales,
-      eps: fundamentals.eps,
-      epsGrowthPercent:
-          fundamentals.epsGrowthPercent,
-      revenueGrowthPercent:
-          fundamentals.revenueGrowthPercent,
-      grossMarginPercent:
-          fundamentals.grossMarginPercent,
-      netMarginPercent:
-          fundamentals.netMarginPercent,
-      roePercent:
-          fundamentals.roePercent,
-      currentRatio:
-          fundamentals.currentRatio,
-      beta:
-          fundamentals.beta,
-      week52High:
-          fundamentals.week52High,
-      week52Low:
-          fundamentals.week52Low,
+      // Fundamental
+      pe: fundamentals.hasPeData ? fundamentals.pe : null,
 
-      technicalScore:
-          technicalScore.score,
-      fundamentalScore:
-          fundamentalScore.score,
-      combinedScore:
-          combinedScore.score,
+      forwardPe: fundamentals.hasForwardPeData ? fundamentals.forwardPe : null,
 
-      growthScore:
-          fundamentalScore.growthScore,
-      profitabilityScore:
-          fundamentalScore.profitabilityScore,
-      valuationScore:
-          fundamentalScore.valuationScore,
-      financialHealthScore:
-          fundamentalScore.financialHealthScore,
-      fundamentalRiskScore:
-          fundamentalScore.riskScore,
+      priceToSales: fundamentals.hasPriceToSalesData
+          ? fundamentals.priceToSales
+          : null,
 
-      combinedRating:
-          combinedScore.rating,
+      eps: fundamentals.hasEpsData ? fundamentals.eps : null,
 
-      technicalStrengths:
-          List<String>.from(
-        technicalScore.strengths,
-      ),
-      technicalWarnings:
-          List<String>.from(
-        technicalScore.warnings,
-      ),
+      epsGrowthPercent: fundamentals.hasEpsGrowthData
+          ? fundamentals.epsGrowthPercent
+          : null,
 
-      fundamentalStrengths:
-          List<String>.from(
-        fundamentalScore.strengths,
-      ),
-      fundamentalWarnings:
-          List<String>.from(
-        fundamentalScore.warnings,
-      ),
+      revenueGrowthPercent: fundamentals.hasRevenueGrowthData
+          ? fundamentals.revenueGrowthPercent
+          : null,
+
+      grossMarginPercent: fundamentals.hasGrossMarginData
+          ? fundamentals.grossMarginPercent
+          : null,
+
+      netMarginPercent: fundamentals.hasNetMarginData
+          ? fundamentals.netMarginPercent
+          : null,
+
+      roePercent: fundamentals.hasRoeData ? fundamentals.roePercent : null,
+
+      currentRatio: fundamentals.hasCurrentRatioData
+          ? fundamentals.currentRatio
+          : null,
+
+      quickRatio: fundamentals.hasQuickRatioData
+          ? fundamentals.quickRatio
+          : null,
+
+      debtToEquity: fundamentals.hasDebtToEquityData
+          ? fundamentals.debtToEquity
+          : null,
+
+      freeCashFlowPerShare: fundamentals.hasFreeCashFlowPerShareData
+          ? fundamentals.freeCashFlowPerShare
+          : null,
+
+      beta: fundamentals.hasBetaData ? fundamentals.beta : null,
+
+      week52High: fundamentals.hasWeek52HighData
+          ? fundamentals.week52High
+          : null,
+
+      week52Low: fundamentals.hasWeek52LowData ? fundamentals.week52Low : null,
+
+      // Scores
+      technicalScore: technicalScore.score,
+      fundamentalScore: fundamentalScore.score,
+      combinedScore: combinedScore.score,
+
+      growthScore: fundamentalScore.growthScore,
+      profitabilityScore: fundamentalScore.profitabilityScore,
+      valuationScore: fundamentalScore.valuationScore,
+      financialHealthScore: fundamentalScore.financialHealthScore,
+      fundamentalRiskScore: fundamentalScore.riskScore,
+
+      // Reliability
+      fundamentalDataCompleteness: fundamentals.dataCompletenessPercent,
+      confidenceScore: confidenceScore,
+
+      // Dynamic weights
+      technicalWeight: combinedScore.technicalWeight,
+      fundamentalWeight: combinedScore.fundamentalWeight,
+
+      combinedRating: combinedScore.rating,
+
+      technicalStrengths: List<String>.from(technicalScore.strengths),
+
+      technicalWarnings: List<String>.from(technicalScore.warnings),
+
+      fundamentalStrengths: List<String>.from(fundamentalScore.strengths),
+
+      fundamentalWarnings: List<String>.from(fundamentalScore.warnings),
     );
   }
 
-  Future<AiBackendResponse> sendToBackend(
-    AiCompanyAnalysisInput input,
-  ) async {
-    final Uri uri = Uri.parse(
-      '$_backendBaseUrl/api/analyze',
-    );
+  Future<AiBackendResponse> sendToBackend(AiCompanyAnalysisInput input) async {
+    final Uri uri = Uri.parse('$_backendBaseUrl/api/analyze');
 
-    final http.Response response =
-        await http
-            .post(
-              uri,
-              headers: {
-                'Content-Type':
-                    'application/json',
-              },
-              body: jsonEncode(
-                input.toJson(),
-              ),
-            )
-            .timeout(
-              const Duration(
-                seconds: 30,
-              ),
-            );
+    final http.Response response = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(input.toJson()),
+        )
+        .timeout(const Duration(seconds: 30));
 
-    final dynamic decoded =
-        jsonDecode(response.body);
+    final dynamic decoded = jsonDecode(response.body);
 
     if (decoded is! Map) {
-      throw Exception(
-        'Backend вернул некорректный ответ.',
-      );
+      throw Exception('Backend вернул некорректный ответ.');
     }
 
-    final Map<String, dynamic> data =
-        Map<String, dynamic>.from(
-      decoded,
-    );
+    final Map<String, dynamic> data = Map<String, dynamic>.from(decoded);
 
     if (response.statusCode != 200) {
       throw Exception(
-        data['message']?.toString() ??
-            'Ошибка backend: ${response.statusCode}',
+        data['message']?.toString() ?? 'Ошибка backend: ${response.statusCode}',
       );
     }
 
-    return AiBackendResponse.fromJson(
-      data,
-    );
+    return AiBackendResponse.fromJson(data);
   }
 }
