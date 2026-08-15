@@ -62,9 +62,7 @@ class StockSearchResult {
     required this.type,
   });
 
-  factory StockSearchResult.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory StockSearchResult.fromJson(Map<String, dynamic> json) {
     return StockSearchResult(
       symbol: json['symbol']?.toString() ?? '',
       displaySymbol: json['displaySymbol']?.toString() ?? '',
@@ -75,27 +73,20 @@ class StockSearchResult {
 }
 
 class StockService {
-  static const String _apiKey = String.fromEnvironment(
-    'FINNHUB_API_KEY',
-  );
+  static const String _apiKey = String.fromEnvironment('FINNHUB_API_KEY');
 
-  static const Duration _cacheDuration =
-      Duration(seconds: 45);
+  static const Duration _cacheDuration = Duration(seconds: 45);
 
   static const int _maxAttempts = 2;
 
-  static final Map<String, _CachedQuote> _quoteCache =
-      <String, _CachedQuote>{};
+  static final Map<String, _CachedQuote> _quoteCache = <String, _CachedQuote>{};
 
-  static final Map<String, Future<StockQuote>>
-      _inFlightQuotes =
+  static final Map<String, Future<StockQuote>> _inFlightQuotes =
       <String, Future<StockQuote>>{};
 
   void _checkApiKey() {
     if (_apiKey.isEmpty) {
-      throw StateError(
-        'API-ключ не передан через FINNHUB_API_KEY.',
-      );
+      throw StateError('API-ключ не передан через FINNHUB_API_KEY.');
     }
   }
 
@@ -105,8 +96,7 @@ class StockService {
   }) async {
     _checkApiKey();
 
-    final normalizedSymbol =
-        symbol.trim().toUpperCase();
+    final normalizedSymbol = symbol.trim().toUpperCase();
 
     if (normalizedSymbol.isEmpty) {
       throw ArgumentError('Тикер не указан.');
@@ -114,23 +104,17 @@ class StockService {
 
     final cached = _quoteCache[normalizedSymbol];
 
-    if (!forceRefresh &&
-        cached != null &&
-        !cached.isExpired) {
+    if (!forceRefresh && cached != null && !cached.isExpired) {
       return cached.quote;
     }
 
-    final activeRequest =
-        _inFlightQuotes[normalizedSymbol];
+    final activeRequest = _inFlightQuotes[normalizedSymbol];
 
     if (activeRequest != null) {
       return activeRequest;
     }
 
-    final request = _loadQuote(
-      normalizedSymbol,
-      staleQuote: cached?.quote,
-    );
+    final request = _loadQuote(normalizedSymbol, staleQuote: cached?.quote);
 
     _inFlightQuotes[normalizedSymbol] = request;
 
@@ -141,17 +125,11 @@ class StockService {
     }
   }
 
-  Future<StockQuote> _loadQuote(
-    String symbol, {
-    StockQuote? staleQuote,
-  }) async {
+  Future<StockQuote> _loadQuote(String symbol, {StockQuote? staleQuote}) async {
     try {
       final quote = await _fetchQuoteFromApi(symbol);
 
-      _quoteCache[symbol] = _CachedQuote(
-        quote: quote,
-        savedAt: DateTime.now(),
-      );
+      _quoteCache[symbol] = _CachedQuote(quote: quote, savedAt: DateTime.now());
 
       return quote;
     } on _TemporaryStockException {
@@ -165,35 +143,25 @@ class StockService {
         return staleQuote;
       }
 
-      throw Exception(
-        'Finnhub временно не отвечает. Повтори позже.',
-      );
+      throw Exception('Finnhub временно не отвечает. Повтори позже.');
     } on http.ClientException {
       if (staleQuote != null) {
         return staleQuote;
       }
 
-      throw Exception(
-        'Не удалось подключиться к Finnhub.',
-      );
+      throw Exception('Не удалось подключиться к Finnhub.');
     }
   }
 
-  Future<StockQuote> _fetchQuoteFromApi(
-    String symbol,
-  ) async {final uri = Uri.https(
-      'finnhub.io',
-      '/api/v1/quote',
-      {
-        'symbol': symbol,
-        'token': _apiKey,
-      },
-    );
+  Future<StockQuote> _fetchQuoteFromApi(String symbol) async {
+    final uri = Uri.https('finnhub.io', '/api/v1/quote', {
+      'symbol': symbol,
+      'token': _apiKey,
+    });
 
     final response = await _getWithRetry(uri);
 
-    if (response.statusCode == 401 ||
-        response.statusCode == 403) {
+    if (response.statusCode == 401 || response.statusCode == 403) {
       throw Exception(
         'Finnhub отклонил API-ключ. '
         'Проверь FINNHUB_API_KEY.',
@@ -201,21 +169,15 @@ class StockService {
     }
 
     if (response.statusCode == 429) {
-      throw _TemporaryStockException(
-        'Превышен лимит запросов Finnhub.',
-      );
+      throw _TemporaryStockException('Превышен лимит запросов Finnhub.');
     }
 
     if (response.statusCode >= 500) {
-      throw _TemporaryStockException(
-        'Finnhub временно недоступен.',
-      );
+      throw _TemporaryStockException('Finnhub временно недоступен.');
     }
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Ошибка Finnhub: HTTP ${response.statusCode}',
-      );
+      throw Exception('Ошибка Finnhub: HTTP ${response.statusCode}');
     }
 
     final decoded = jsonDecode(response.body);
@@ -229,17 +191,13 @@ class StockService {
     final quote = StockQuote.fromJson(decoded);
 
     if (quote.currentPrice <= 0) {
-      throw Exception(
-        'Котировка для $symbol не найдена.',
-      );
+      throw Exception('Котировка для $symbol не найдена.');
     }
 
     return quote;
   }
 
-  Future<List<StockSearchResult>> searchSymbols(
-    String query,
-  ) async {
+  Future<List<StockSearchResult>> searchSymbols(String query) async {
     _checkApiKey();
 
     final cleanedQuery = query.trim();
@@ -248,19 +206,14 @@ class StockService {
       return [];
     }
 
-    final uri = Uri.https(
-      'finnhub.io',
-      '/api/v1/search',
-      {
-        'q': cleanedQuery,
-        'token': _apiKey,
-      },
-    );
+    final uri = Uri.https('finnhub.io', '/api/v1/search', {
+      'q': cleanedQuery,
+      'token': _apiKey,
+    });
 
     final response = await _getWithRetry(uri);
 
-    if (response.statusCode == 401 ||
-        response.statusCode == 403) {
+    if (response.statusCode == 401 || response.statusCode == 403) {
       throw Exception(
         'Finnhub отклонил API-ключ. '
         'Проверь FINNHUB_API_KEY.',
@@ -275,9 +228,7 @@ class StockService {
     }
 
     if (response.statusCode >= 500) {
-      throw Exception(
-        'Поиск Finnhub временно недоступен.',
-      );
+      throw Exception('Поиск Finnhub временно недоступен.');
     }
 
     if (response.statusCode != 200) {
@@ -290,9 +241,7 @@ class StockService {
     final decoded = jsonDecode(response.body);
 
     if (decoded is! Map<String, dynamic>) {
-      throw const FormatException(
-        'Finnhub вернул неизвестный формат поиска.',
-      );
+      throw const FormatException('Finnhub вернул неизвестный формат поиска.');
     }
 
     final rawResults = decoded['result'];
@@ -304,39 +253,25 @@ class StockService {
     return rawResults
         .whereType<Map<String, dynamic>>()
         .map(StockSearchResult.fromJson)
-        .where(
-          (item) =>
-              item.symbol.isNotEmpty &&
-              item.description.isNotEmpty,
-        )
+        .where((item) => item.symbol.isNotEmpty && item.description.isNotEmpty)
         .take(20)
         .toList();
   }
 
-  Future<http.Response> _getWithRetry(
-    Uri uri,
-  ) async {
+  Future<http.Response> _getWithRetry(Uri uri) async {
     Object? lastError;
 
-    for (var attempt = 1;
-        attempt <= _maxAttempts;
-        attempt++) {
+    for (var attempt = 1; attempt <= _maxAttempts; attempt++) {
       try {
         final response = await http
             .get(uri)
-            .timeout(
-              const Duration(seconds: 15),
-            );
+            .timeout(const Duration(seconds: 15));
 
         final temporaryError =
-            response.statusCode == 429 ||
-            response.statusCode >= 500;
+            response.statusCode == 429 || response.statusCode >= 500;
 
-        if (temporaryError &&
-            attempt < _maxAttempts) {
-          await Future<void>.delayed(
-            const Duration(seconds: 2),
-          );
+        if (temporaryError && attempt < _maxAttempts) {
+          await Future<void>.delayed(const Duration(seconds: 2));
 
           continue;
         }
@@ -346,9 +281,7 @@ class StockService {
         lastError = error;
 
         if (attempt < _maxAttempts) {
-          await Future<void>.delayed(
-            const Duration(seconds: 2),
-          );
+          await Future<void>.delayed(const Duration(seconds: 2));
 
           continue;
         }
@@ -356,9 +289,7 @@ class StockService {
         lastError = error;
 
         if (attempt < _maxAttempts) {
-          await Future<void>.delayed(
-            const Duration(seconds: 2),
-          );
+          await Future<void>.delayed(const Duration(seconds: 2));
 
           continue;
         }
@@ -373,8 +304,7 @@ class StockService {
       throw lastError;
     }
 
-    throw Exception(
-      'Не удалось получить данные Finnhub.',);
+    throw Exception('Не удалось получить данные Finnhub.');
   }
 
   void clearQuoteCache([String? symbol]) {
@@ -383,9 +313,7 @@ class StockService {
       return;
     }
 
-    _quoteCache.remove(
-      symbol.trim().toUpperCase(),
-    );
+    _quoteCache.remove(symbol.trim().toUpperCase());
   }
 }
 
@@ -393,14 +321,10 @@ class _CachedQuote {
   final StockQuote quote;
   final DateTime savedAt;
 
-  const _CachedQuote({
-    required this.quote,
-    required this.savedAt,
-  });
+  const _CachedQuote({required this.quote, required this.savedAt});
 
   bool get isExpired {
-    return DateTime.now().difference(savedAt) >
-        StockService._cacheDuration;
+    return DateTime.now().difference(savedAt) > StockService._cacheDuration;
   }
 }
 

@@ -12,7 +12,9 @@ import '../../services/stock_service.dart';
 import '../../shared/widgets/historical_price_chart.dart';
 
 class CompanyAnalysisScreen extends StatefulWidget {
-  const CompanyAnalysisScreen({super.key});
+  final String? initialSymbol;
+
+  const CompanyAnalysisScreen({super.key, this.initialSymbol});
 
   @override
   State<CompanyAnalysisScreen> createState() => _CompanyAnalysisScreenState();
@@ -47,6 +49,24 @@ class _CompanyAnalysisScreenState extends State<CompanyAnalysisScreen> {
 
   AiStructuredAnalysis? _aiAnalysis;
   bool _isAiLoading = false;
+  @override
+  void initState() {
+    super.initState();
+
+    final String? initialSymbol = widget.initialSymbol;
+
+    if (initialSymbol != null && initialSymbol.trim().isNotEmpty) {
+      _symbolController.text = initialSymbol.trim().toUpperCase();
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+
+        _analyzeCompany();
+      });
+    }
+  }
 
   @override
   void dispose() {

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../features/analysis/analysis_screen.dart';
+import '../features/comparison/comparison_screen.dart';
 import '../features/favorites/favorites_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/home/search/search_screen.dart';
 import '../features/market/market_screen.dart';
 import '../features/portfolio/portfolio_screen.dart';
 import '../features/transactions/transactions_screen.dart';
@@ -25,25 +27,25 @@ class _AppShellState extends State<AppShell> {
 
   List<Widget> _buildPages() {
     return [
-      HomeScreen(
-        onSelectPage: _selectPage,
-      ),
+      HomeScreen(onSelectPage: _selectPage),
       const MarketScreen(),
       const PortfolioScreen(),
       const FavoritesScreen(),
       const TransactionsScreen(),
       const AnalysisScreen(),
+      const ComparisonScreen(),
+      const SearchScreen(),
     ];
   }
 
   @override
   Widget build(BuildContext context) {
-    final pages = _buildPages();
+    final List<Widget> pages = _buildPages();
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isDesktop = constraints.maxWidth >= 900;
-        final isWideDesktop = constraints.maxWidth >= 1200;
+        final bool isDesktop = constraints.maxWidth >= 900;
+        final bool isWideDesktop = constraints.maxWidth >= 1200;
 
         if (isDesktop) {
           return Scaffold(
@@ -51,13 +53,12 @@ class _AppShellState extends State<AppShell> {
               children: [
                 NavigationRail(
                   extended: isWideDesktop,
-                  selectedIndex: _selectedIndex,
+                  selectedIndex: _selectedIndex > 6 ? 0 : _selectedIndex,
                   onDestinationSelected: _selectPage,
                   backgroundColor: const Color(0xFF0F172A),
-                  indicatorColor:
-                      const Color(0xFF20D3C2).withValues(
-                    alpha: 0.16,
-                  ),
+                  indicatorColor: const Color(
+                    0xFF20D3C2,
+                  ).withValues(alpha: 0.16),
                   selectedIconTheme: const IconThemeData(
                     color: Color(0xFF20D3C2),
                   ),
@@ -66,9 +67,7 @@ class _AppShellState extends State<AppShell> {
                     fontWeight: FontWeight.bold,
                   ),
                   leading: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 24,
-                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 24),
                     child: isWideDesktop
                         ? const Row(
                             mainAxisSize: MainAxisSize.min,
@@ -106,35 +105,29 @@ class _AppShellState extends State<AppShell> {
                       label: Text('Рынок'),
                     ),
                     NavigationRailDestination(
-                      icon: Icon(
-                        Icons.account_balance_wallet_outlined,
-                      ),
-                      selectedIcon: Icon(
-                        Icons.account_balance_wallet,
-                      ),
+                      icon: Icon(Icons.account_balance_wallet_outlined),
+                      selectedIcon: Icon(Icons.account_balance_wallet),
                       label: Text('Портфель'),
                     ),
-                    NavigationRailDestination(icon: Icon(Icons.star_border),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.star_border),
                       selectedIcon: Icon(Icons.star),
                       label: Text('Избранное'),
                     ),
                     NavigationRailDestination(
-                      icon: Icon(
-                        Icons.receipt_long_outlined,
-                      ),
-                      selectedIcon: Icon(
-                        Icons.receipt_long,
-                      ),
+                      icon: Icon(Icons.receipt_long_outlined),
+                      selectedIcon: Icon(Icons.receipt_long),
                       label: Text('История'),
                     ),
                     NavigationRailDestination(
-                      icon: Icon(
-                        Icons.psychology_outlined,
-                      ),
-                      selectedIcon: Icon(
-                        Icons.psychology,
-                      ),
+                      icon: Icon(Icons.psychology_outlined),
+                      selectedIcon: Icon(Icons.psychology),
                       label: Text('Анализы'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.compare_arrows_outlined),
+                      selectedIcon: Icon(Icons.compare_arrows),
+                      label: Text('Сравнение'),
                     ),
                   ],
                 ),
@@ -146,10 +139,7 @@ class _AppShellState extends State<AppShell> {
                 ),
 
                 Expanded(
-                  child: IndexedStack(
-                    index: _selectedIndex,
-                    children: pages,
-                  ),
+                  child: IndexedStack(index: _selectedIndex, children: pages),
                 ),
               ],
             ),
@@ -157,12 +147,9 @@ class _AppShellState extends State<AppShell> {
         }
 
         return Scaffold(
-          body: IndexedStack(
-            index: _selectedIndex,
-            children: pages,
-          ),
+          body: IndexedStack(index: _selectedIndex, children: pages),
           bottomNavigationBar: NavigationBar(
-            selectedIndex: _selectedIndex,
+            selectedIndex: _selectedIndex > 6 ? 0 : _selectedIndex,
             onDestinationSelected: _selectPage,
             destinations: const [
               NavigationDestination(
@@ -176,12 +163,8 @@ class _AppShellState extends State<AppShell> {
                 label: 'Рынок',
               ),
               NavigationDestination(
-                icon: Icon(
-                  Icons.account_balance_wallet_outlined,
-                ),
-                selectedIcon: Icon(
-                  Icons.account_balance_wallet,
-                ),
+                icon: Icon(Icons.account_balance_wallet_outlined),
+                selectedIcon: Icon(Icons.account_balance_wallet),
                 label: 'Портфель',
               ),
               NavigationDestination(
@@ -190,22 +173,19 @@ class _AppShellState extends State<AppShell> {
                 label: 'Избранное',
               ),
               NavigationDestination(
-                icon: Icon(
-                  Icons.receipt_long_outlined,
-                ),
-                selectedIcon: Icon(
-                  Icons.receipt_long,
-                ),
+                icon: Icon(Icons.receipt_long_outlined),
+                selectedIcon: Icon(Icons.receipt_long),
                 label: 'История',
               ),
               NavigationDestination(
-                icon: Icon(
-                  Icons.psychology_outlined,
-                ),
-                selectedIcon: Icon(
-                  Icons.psychology,
-                ),
+                icon: Icon(Icons.psychology_outlined),
+                selectedIcon: Icon(Icons.psychology),
                 label: 'Анализы',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.compare_arrows_outlined),
+                selectedIcon: Icon(Icons.compare_arrows),
+                label: 'Сравнение',
               ),
             ],
           ),

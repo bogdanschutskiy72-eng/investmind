@@ -5,10 +5,7 @@ import '../../shared/widgets/feature_tile.dart';
 class HomeScreen extends StatelessWidget {
   final ValueChanged<int> onSelectPage;
 
-  const HomeScreen({
-    super.key,
-    required this.onSelectPage,
-  });
+  const HomeScreen({super.key, required this.onSelectPage});
 
   @override
   Widget build(BuildContext context) {
@@ -16,34 +13,34 @@ class HomeScreen extends StatelessWidget {
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 1200,
-            ),
+            constraints: const BoxConstraints(maxWidth: 1200),
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: ListView(
                 children: [
                   const SizedBox(height: 20),
+
                   const Text(
                     'Добрый вечер, Богдан 👋',
-                    style: TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
                   ),
+
                   const SizedBox(height: 8),
+
                   const Text(
                     'Анализируй. Понимай. Инвестируй осознанно.',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.white70,
-                    ),
+                    style: TextStyle(fontSize: 18, color: Colors.white70),
                   ),
+
                   const SizedBox(height: 30),
+
                   TextField(
+                    readOnly: true,
+                    onTap: () => onSelectPage(7),
                     decoration: InputDecoration(
                       hintText: 'Найти компанию...',
                       prefixIcon: const Icon(Icons.search),
+                      suffixIcon: const Icon(Icons.arrow_forward_ios, size: 16),
                       filled: true,
                       fillColor: const Color(0xFF1E293B),
                       border: OutlineInputBorder(
@@ -52,7 +49,9 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ),
                   ),
+
                   const SizedBox(height: 24),
+
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
@@ -78,7 +77,9 @@ class HomeScreen extends StatelessWidget {
                       ],
                     ),
                   ),
+
                   const SizedBox(height: 24),
+
                   Row(
                     children: [
                       FeatureTile(
@@ -94,7 +95,9 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 16),
+
                   Row(
                     children: [
                       FeatureTile(
@@ -107,9 +110,12 @@ class HomeScreen extends StatelessWidget {
                         icon: Icons.account_balance_wallet,
                         title: 'Портфель',
                         onTap: () => onSelectPage(2),
-                      ),],
+                      ),
+                    ],
                   ),
+
                   const SizedBox(height: 16),
+
                   Row(
                     children: [
                       FeatureTile(
@@ -125,6 +131,20 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+
+                  const SizedBox(height: 16),
+
+                  Row(
+                    children: [
+                      FeatureTile(
+                        icon: Icons.compare_arrows,
+                        title: 'Сравнение',
+                        onTap: () => onSelectPage(6),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
