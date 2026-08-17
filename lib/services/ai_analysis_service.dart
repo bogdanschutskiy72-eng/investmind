@@ -58,7 +58,7 @@ class AiCompanyAnalysisInput {
   final int financialHealthScore;
   final int fundamentalRiskScore;
 
-  // InvestMind reliability
+  // Reliability
   final int fundamentalDataCompleteness;
   final int confidenceScore;
 

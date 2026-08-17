@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'ai_comparison_service.dart';
 import 'company_comparison.dart';
 import 'comparison_insight_service.dart';
 import 'comparison_service.dart';
@@ -17,15 +18,21 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
   final ComparisonInsightService _insightService =
       const ComparisonInsightService();
 
+  final AiComparisonService _aiComparisonService = const AiComparisonService();
+
   final List<TextEditingController> _controllers = [
     TextEditingController(),
     TextEditingController(),
   ];
 
   bool _isLoading = false;
+  bool _isAiLoading = false;
+
   String? _error;
+  String? _aiError;
 
   List<CompanyComparison> _companies = [];
+  AiComparisonResult? _aiComparison;
 
   @override
   void dispose() {
@@ -60,6 +67,8 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
       _controllers.removeAt(index);
 
       _companies = [];
+      _aiComparison = null;
+      _aiError = null;
       _error = null;
     });
   }
@@ -83,6 +92,10 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
     setState(() {
       _isLoading = true;
       _error = null;
+
+      _aiComparison = null;
+      _aiError = null;
+
       _companies = [];
     });
 
@@ -103,10 +116,7 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
       }
 
       setState(() {
-        _error = error
-            .toString()
-            .replaceFirst('Exception: ', '')
-            .replaceFirst('Invalid argument(s): ', '');
+        _error = _cleanError(error);
       });
     } finally {
       if (mounted) {
@@ -115,6 +125,52 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
         });
       }
     }
+  }
+
+  Future<void> _requestAiComparison() async {
+    if (_companies.length < 2) {
+      return;
+    }
+
+    setState(() {
+      _isAiLoading = true;
+      _aiError = null;
+      _aiComparison = null;
+    });
+
+    try {
+      final AiComparisonBackendResponse response = await _aiComparisonService
+          .compareCompanies(_companies);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _aiComparison = response.comparison;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _aiError = _cleanError(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAiLoading = false;
+        });
+      }
+    }
+  }
+
+  String _cleanError(Object error) {
+    return error
+        .toString()
+        .replaceFirst('Exception: ', '')
+        .replaceFirst('Invalid argument(s): ', '');
   }
 
   @override
@@ -148,7 +204,7 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
 
                   const SizedBox(height: 20),
 
-                  if (_error != null) _buildErrorCard(),
+                  if (_error != null) _buildErrorCard(_error!),
 
                   if (_isLoading)
                     const Padding(
@@ -206,9 +262,7 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
                 children: List.generate(
                   _controllers.length,
                   (index) => SizedBox(
-                    width: (_controllers.length <= 2)
-                        ? (constraints.maxWidth - 12) / 2
-                        : (constraints.maxWidth - 12) / 2,
+                    width: (constraints.maxWidth - 12) / 2,
                     child: _buildCompanyInput(index),
                   ),
                 ),
@@ -284,7 +338,7 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
     return examples[index];
   }
 
-  Widget _buildErrorCard() {
+  Widget _buildErrorCard(String message) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -292,7 +346,7 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
         color: Colors.red.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Text(_error!, style: const TextStyle(color: Colors.redAccent)),
+      child: Text(message, style: const TextStyle(color: Colors.redAccent)),
     );
   }
 
@@ -320,7 +374,8 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
             SizedBox(height: 10),
 
             Text(
-              'Можно сравнить от 2 до 4 компаний.',
+              'Можно сравнить '
+              'от 2 до 4 компаний.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white70),
             ),
@@ -395,9 +450,22 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
               .toList(),
         ),
 
-        if (_companies.length >= 2) ...[
+        const SizedBox(height: 16),
+
+        _buildInsightCard(),
+
+        const SizedBox(height: 16),
+
+        _buildAiActionCard(),
+
+        if (_aiError != null) ...[
           const SizedBox(height: 16),
-          _buildInsightCard(),
+          _buildErrorCard(_aiError!),
+        ],
+
+        if (_aiComparison != null) ...[
+          const SizedBox(height: 16),
+          _buildAiComparisonCard(_aiComparison!),
         ],
 
         const SizedBox(height: 24),
@@ -585,6 +653,217 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
             'показателях InvestMind и не является '
             'рекомендацией купить или продать актив.',
             style: TextStyle(fontSize: 12, color: Colors.white38),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAiActionCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'AI-сравнение',
+            style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
+          ),
+
+          const SizedBox(height: 8),
+
+          const Text(
+            'AI объяснит различия между компаниями '
+            'на основе уже рассчитанных показателей InvestMind.',
+            style: TextStyle(color: Colors.white70, height: 1.45),
+          ),
+
+          const SizedBox(height: 16),
+
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isAiLoading ? null : _requestAiComparison,
+              icon: _isAiLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.psychology),
+              label: Text(
+                _isAiLoading ? 'AI анализирует...' : 'Получить AI-сравнение',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAiComparisonCard(AiComparisonResult result) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.psychology, color: Color(0xFF20D3C2)),
+              SizedBox(width: 10),
+              Text(
+                'InvestMind AI Comparison',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          _buildAiSectionTitle('Общий вывод'),
+
+          const SizedBox(height: 8),
+
+          Text(
+            result.summary,
+            style: const TextStyle(color: Colors.white70, height: 1.55),
+          ),
+
+          const SizedBox(height: 20),
+
+          _buildAiSectionTitle('Лидер'),
+
+          const SizedBox(height: 8),
+
+          Text(
+            result.leader,
+            style: const TextStyle(
+              fontSize: 18,
+              color: Color(0xFF20D3C2),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          Text(
+            result.leaderReason,
+            style: const TextStyle(color: Colors.white70, height: 1.55),
+          ),
+
+          if (result.tradeoffs.isNotEmpty) ...[
+            const SizedBox(height: 20),
+
+            _buildAiSectionTitle('Ключевые компромиссы'),
+
+            const SizedBox(height: 8),
+
+            ...result.tradeoffs.map((item) => _buildBullet(item)),
+          ],
+
+          if (result.companyInsights.isNotEmpty) ...[
+            const SizedBox(height: 20),
+
+            _buildAiSectionTitle('По компаниям'),
+
+            const SizedBox(height: 10),
+
+            ...result.companyInsights.map(_buildCompanyInsight),
+          ],
+
+          if (result.watch.isNotEmpty) ...[
+            const SizedBox(height: 20),
+
+            _buildAiSectionTitle('Что отслеживать'),
+
+            const SizedBox(height: 8),
+
+            ...result.watch.map((item) => _buildBullet(item)),
+          ],
+
+          const SizedBox(height: 16),
+
+          const Text(
+            'AI не пересчитывает InvestMind Score '
+            'и не является инвестиционной рекомендацией.',
+            style: TextStyle(fontSize: 12, color: Colors.white38),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAiSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+      ),
+    );
+  }
+
+  Widget _buildBullet(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Icon(Icons.circle, size: 6, color: Color(0xFF20D3C2)),
+          ),
+
+          const SizedBox(width: 10),
+
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(color: Colors.white70, height: 1.45),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompanyInsight(AiComparisonCompanyInsight item) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item.symbol,
+            style: const TextStyle(
+              color: Color(0xFF20D3C2),
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          Text(
+            item.insight,
+            style: const TextStyle(color: Colors.white70, height: 1.45),
           ),
         ],
       ),
