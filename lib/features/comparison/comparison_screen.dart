@@ -17,39 +17,62 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
   final ComparisonInsightService _insightService =
       const ComparisonInsightService();
 
-  final TextEditingController _firstController = TextEditingController();
-
-  final TextEditingController _secondController = TextEditingController();
+  final List<TextEditingController> _controllers = [
+    TextEditingController(),
+    TextEditingController(),
+  ];
 
   bool _isLoading = false;
-
   String? _error;
 
   List<CompanyComparison> _companies = [];
 
   @override
   void dispose() {
-    _firstController.dispose();
-    _secondController.dispose();
+    for (final controller in _controllers) {
+      controller.dispose();
+    }
+
     super.dispose();
   }
 
-  Future<void> _compare() async {
-    final String first = _firstController.text.trim().toUpperCase();
-
-    final String second = _secondController.text.trim().toUpperCase();
-
-    if (first.isEmpty || second.isEmpty) {
-      setState(() {
-        _error = 'Укажи тикеры двух компаний для сравнения.';
-      });
-
+  void _addCompanyField() {
+    if (_controllers.length >= 4) {
       return;
     }
 
-    if (first == second) {
+    setState(() {
+      _controllers.add(TextEditingController());
+    });
+  }
+
+  void _removeCompanyField(int index) {
+    if (_controllers.length <= 2) {
+      return;
+    }
+
+    if (index < 2) {
+      return;
+    }
+
+    setState(() {
+      _controllers[index].dispose();
+      _controllers.removeAt(index);
+
+      _companies = [];
+      _error = null;
+    });
+  }
+
+  Future<void> _compare() async {
+    final List<String> symbols = _controllers
+        .map((controller) => controller.text.trim().toUpperCase())
+        .where((symbol) => symbol.isNotEmpty)
+        .toList();
+
+    if (symbols.length < 2) {
       setState(() {
-        _error = 'Для сравнения нужны две разные компании.';
+        _error = 'Укажи минимум две компании для сравнения.';
       });
 
       return;
@@ -65,7 +88,7 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
 
     try {
       final List<CompanyComparison> result = await _comparisonService
-          .compareCompanies([first, second]);
+          .compareCompanies(symbols);
 
       if (!mounted) {
         return;
@@ -100,7 +123,7 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1200),
+            constraints: const BoxConstraints(maxWidth: 1300),
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -114,8 +137,8 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
                   const SizedBox(height: 8),
 
                   const Text(
-                    'Сравни компании по ключевым '
-                    'показателям InvestMind.',
+                    'Сравни от 2 до 4 компаний '
+                    'по ключевым показателям InvestMind.',
                     style: TextStyle(fontSize: 17, color: Colors.white70),
                   ),
 
@@ -159,64 +182,106 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
       ),
       child: Column(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _firstController,
-                  textCapitalization: TextCapitalization.characters,
-                  onSubmitted: (_) => _compare(),
-                  decoration: _inputDecoration(
-                    'Первая компания, например NVDA',
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final bool compact = constraints.maxWidth < 800;
+
+              if (compact) {
+                return Column(
+                  children: List.generate(
+                    _controllers.length,
+                    (index) => Padding(
+                      padding: EdgeInsets.only(
+                        bottom: index == _controllers.length - 1 ? 0 : 12,
+                      ),
+                      child: _buildCompanyInput(index),
+                    ),
+                  ),
+                );
+              }
+
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: List.generate(
+                  _controllers.length,
+                  (index) => SizedBox(
+                    width: (_controllers.length <= 2)
+                        ? (constraints.maxWidth - 12) / 2
+                        : (constraints.maxWidth - 12) / 2,
+                    child: _buildCompanyInput(index),
                   ),
                 ),
-              ),
-
-              const SizedBox(width: 12),
-
-              Expanded(
-                child: TextField(
-                  controller: _secondController,
-                  textCapitalization: TextCapitalization.characters,
-                  onSubmitted: (_) => _compare(),
-                  decoration: _inputDecoration('Вторая компания, например AMD'),
-                ),
-              ),
-            ],
+              );
+            },
           ),
 
           const SizedBox(height: 16),
 
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _isLoading ? null : _compare,
-              icon: _isLoading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.compare_arrows),
-              label: Text(_isLoading ? 'Сравниваем...' : 'Сравнить'),
-            ),
+          Row(
+            children: [
+              if (_controllers.length < 4)
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _addCompanyField,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Добавить компанию'),
+                  ),
+                ),
+
+              if (_controllers.length < 4) const SizedBox(width: 12),
+
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _isLoading ? null : _compare,
+                  icon: _isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.compare_arrows),
+                  label: Text(_isLoading ? 'Сравниваем...' : 'Сравнить'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  InputDecoration _inputDecoration(String hint) {
-    return InputDecoration(
-      hintText: hint,
-      prefixIcon: const Icon(Icons.search),
-      filled: true,
-      fillColor: const Color(0xFF111827),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide.none,
+  Widget _buildCompanyInput(int index) {
+    final bool removable = index >= 2 && _controllers.length > 2;
+
+    return TextField(
+      controller: _controllers[index],
+      textCapitalization: TextCapitalization.characters,
+      onSubmitted: (_) => _compare(),
+      decoration: InputDecoration(
+        hintText: 'Компания ${index + 1}, например ${_exampleTicker(index)}',
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: removable
+            ? IconButton(
+                tooltip: 'Убрать компанию',
+                onPressed: _isLoading ? null : () => _removeCompanyField(index),
+                icon: const Icon(Icons.close),
+              )
+            : null,
+        filled: true,
+        fillColor: const Color(0xFF111827),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
       ),
     );
+  }
+
+  String _exampleTicker(int index) {
+    const examples = ['NVDA', 'AMD', 'INTC', 'PLTR'];
+
+    return examples[index];
   }
 
   Widget _buildErrorCard() {
@@ -248,15 +313,14 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
             SizedBox(height: 16),
 
             Text(
-              'Выбери две компании',
+              'Выбери компании',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
 
             SizedBox(height: 10),
 
             Text(
-              'Например: NVDA и AMD, '
-              'KO и PEP, JPM и BAC.',
+              'Можно сравнить от 2 до 4 компаний.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white70),
             ),
@@ -270,82 +334,215 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
     return ListView(
       children: [
         _buildCompanyHeader(),
+
         const SizedBox(height: 16),
 
         _buildScoreRow(
           title: 'InvestMind Score',
-          first: _companies[0].investMindScore,
-          second: _companies[1].investMindScore,
+          values: _companies.map((company) => company.investMindScore).toList(),
         ),
 
         _buildScoreRow(
           title: 'Technical',
-          first: _companies[0].technicalScore,
-          second: _companies[1].technicalScore,
+          values: _companies.map((company) => company.technicalScore).toList(),
         ),
 
         _buildScoreRow(
           title: 'Fundamental',
-          first: _companies[0].fundamentalScore,
-          second: _companies[1].fundamentalScore,
+          values: _companies
+              .map((company) => company.fundamentalScore)
+              .toList(),
         ),
 
         _buildScoreRow(
           title: 'Growth',
-          first: _companies[0].growthScore,
-          second: _companies[1].growthScore,
+          values: _companies.map((company) => company.growthScore).toList(),
         ),
 
         _buildScoreRow(
           title: 'Profitability',
-          first: _companies[0].profitabilityScore,
-          second: _companies[1].profitabilityScore,
+          values: _companies
+              .map((company) => company.profitabilityScore)
+              .toList(),
         ),
 
         _buildScoreRow(
           title: 'Valuation',
-          first: _companies[0].valuationScore,
-          second: _companies[1].valuationScore,
+          values: _companies.map((company) => company.valuationScore).toList(),
         ),
 
         _buildScoreRow(
           title: 'Financial Health',
-          first: _companies[0].financialHealthScore,
-          second: _companies[1].financialHealthScore,
+          values: _companies
+              .map((company) => company.financialHealthScore)
+              .toList(),
         ),
 
         _buildScoreRow(
           title: 'Risk',
-          first: _companies[0].riskScore,
-          second: _companies[1].riskScore,
+          values: _companies.map((company) => company.riskScore).toList(),
         ),
 
         _buildPercentRow(
           title: 'Confidence',
-          first: _companies[0].confidenceScore,
-          second: _companies[1].confidenceScore,
+          values: _companies.map((company) => company.confidenceScore).toList(),
         ),
 
         _buildPercentRow(
           title: 'Полнота данных',
-          first: _companies[0].dataCompletenessPercent,
-          second: _companies[1].dataCompletenessPercent,
+          values: _companies
+              .map((company) => company.dataCompletenessPercent)
+              .toList(),
         ),
 
-        const SizedBox(height: 16),
-
-        _buildInsightCard(),
+        if (_companies.length >= 2) ...[
+          const SizedBox(height: 16),
+          _buildInsightCard(),
+        ],
 
         const SizedBox(height: 24),
       ],
     );
   }
 
-  Widget _buildInsightCard() {
-    final String summary = _insightService.buildSummary(
-      _companies[0],
-      _companies[1],
+  Widget _buildCompanyHeader() {
+    return Container(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          const Expanded(flex: 2, child: SizedBox()),
+
+          ..._companies.map(
+            (company) => Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: _buildCompanyCard(company),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
+  }
+
+  Widget _buildCompanyCard(CompanyComparison company) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            company.symbol,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF20D3C2),
+            ),
+          ),
+
+          const SizedBox(height: 4),
+
+          Text(
+            company.companyName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
+
+          const SizedBox(height: 6),
+
+          Text(
+            company.industry,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white54, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScoreRow({required String title, required List<int> values}) {
+    return _buildMetricRow(title: title, values: values, suffix: '/100');
+  }
+
+  Widget _buildPercentRow({required String title, required List<int> values}) {
+    return _buildMetricRow(title: title, values: values, suffix: '%');
+  }
+
+  Widget _buildMetricRow({
+    required String title,
+    required List<int> values,
+    required String suffix,
+  }) {
+    final int bestValue = values.reduce(
+      (current, next) => current > next ? current : next,
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+
+          ...List.generate(
+            values.length,
+            (index) => Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: _buildValue(
+                  '${values[index]}$suffix',
+                  highlighted: values[index] == bestValue,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildValue(String value, {required bool highlighted}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: highlighted
+            ? const Color(0xFF20D3C2).withValues(alpha: 0.12)
+            : Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        value,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.bold,
+          color: highlighted ? const Color(0xFF20D3C2) : Colors.white,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInsightCard() {
+    final String summary = _insightService.buildSummary(_companies);
 
     return Container(
       width: double.infinity,
@@ -390,147 +587,6 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
             style: TextStyle(fontSize: 12, color: Colors.white38),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildCompanyHeader() {
-    return Row(
-      children: [
-        const Expanded(flex: 2, child: SizedBox()),
-
-        Expanded(child: _buildCompanyCard(_companies[0])),
-
-        const SizedBox(width: 12),
-
-        Expanded(child: _buildCompanyCard(_companies[1])),
-      ],
-    );
-  }
-
-  Widget _buildCompanyCard(CompanyComparison company) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            company.symbol,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF20D3C2),
-            ),
-          ),
-
-          const SizedBox(height: 4),
-
-          Text(
-            company.companyName,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-
-          const SizedBox(height: 6),
-
-          Text(
-            company.industry,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white54, fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildScoreRow({
-    required String title,
-    required int first,
-    required int second,
-  }) {
-    return _buildMetricRow(
-      title: title,
-      first: '$first/100',
-      second: '$second/100',
-      firstWins: first > second,
-      secondWins: second > first,
-    );
-  }
-
-  Widget _buildPercentRow({
-    required String title,
-    required int first,
-    required int second,
-  }) {
-    return _buildMetricRow(
-      title: title,
-      first: '$first%',
-      second: '$second%',
-      firstWins: first > second,
-      secondWins: second > first,
-    );
-  }
-
-  Widget _buildMetricRow({
-    required String title,
-    required String first,
-    required String second,
-    required bool firstWins,
-    required bool secondWins,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white70,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-
-          Expanded(child: _buildValue(first, highlighted: firstWins)),
-
-          const SizedBox(width: 12),
-
-          Expanded(child: _buildValue(second, highlighted: secondWins)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildValue(String value, {required bool highlighted}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-      decoration: BoxDecoration(
-        color: highlighted
-            ? const Color(0xFF20D3C2).withValues(alpha: 0.12)
-            : Colors.white.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        value,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: highlighted ? const Color(0xFF20D3C2) : Colors.white,
-        ),
       ),
     );
   }

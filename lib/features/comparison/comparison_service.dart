@@ -50,68 +50,74 @@ class ComparisonService {
       throw ArgumentError('Тикер компании не указан.');
     }
 
-    final StockQuote quote = await _stockService.fetchQuote(
-      ticker,
-      forceRefresh: true,
-    );
+    try {
+      final StockQuote quote = await _stockService.fetchQuote(
+        ticker,
+        forceRefresh: true,
+      );
 
-    final CompanyProfile profile = await _profileService.fetchProfile(ticker);
+      final CompanyProfile profile = await _profileService.fetchProfile(ticker);
 
-    final HistoricalPriceAnalysis historical = await _historicalPriceService
-        .fetchAnalysis(ticker, days: 90);
+      final HistoricalPriceAnalysis historical = await _historicalPriceService
+          .fetchAnalysis(ticker, days: 90);
 
-    final FundamentalData fundamentals = await _fundamentalService
-        .fetchFundamentals(ticker);
+      final FundamentalData fundamentals = await _fundamentalService
+          .fetchFundamentals(ticker);
 
-    final InvestMindScoreResult technicalScore = _technicalScoreService
-        .calculate(
-          currentPrice: quote.currentPrice,
-          movingAverage20: historical.movingAverage20,
-          movingAverage50: historical.movingAverage50,
-          volatilityPercent: historical.annualizedVolatilityPercent,
-          maxDrawdownPercent: historical.maxDrawdownPercent,
-          trendStrengthPercent: historical.trendStrengthPercent,
-          trendSlopePercentPerDay: historical.trendSlopePercentPerDay,
-        );
+      final InvestMindScoreResult technicalScore = _technicalScoreService
+          .calculate(
+            currentPrice: quote.currentPrice,
+            movingAverage20: historical.movingAverage20,
+            movingAverage50: historical.movingAverage50,
+            volatilityPercent: historical.annualizedVolatilityPercent,
+            maxDrawdownPercent: historical.maxDrawdownPercent,
+            trendStrengthPercent: historical.trendStrengthPercent,
+            trendSlopePercentPerDay: historical.trendSlopePercentPerDay,
+          );
 
-    final FundamentalScoreResult fundamentalScore = _fundamentalScoreService
-        .calculate(fundamentals, industry: profile.industry);
+      final FundamentalScoreResult fundamentalScore = _fundamentalScoreService
+          .calculate(fundamentals, industry: profile.industry);
 
-    final CombinedScoreResult combinedScore = _combinedScoreService.calculate(
-      technical: technicalScore,
-      fundamental: fundamentalScore,
-      fundamentalData: fundamentals,
-    );
+      final CombinedScoreResult combinedScore = _combinedScoreService.calculate(
+        technical: technicalScore,
+        fundamental: fundamentalScore,
+        fundamentalData: fundamentals,
+      );
 
-    final ConfidenceScoreResult confidenceScore = _confidenceScoreService
-        .calculate(
-          fundamentals: fundamentals,
-          historical: historical,
-          combinedScore: combinedScore,
-        );
+      final ConfidenceScoreResult confidenceScore = _confidenceScoreService
+          .calculate(
+            fundamentals: fundamentals,
+            historical: historical,
+            combinedScore: combinedScore,
+          );
 
-    return CompanyComparison(
-      symbol: ticker,
-      companyName: profile.name,
-      industry: profile.industry,
-      investMindScore: combinedScore.score,
-      technicalScore: technicalScore.score,
-      fundamentalScore: fundamentalScore.score,
-      growthScore: fundamentalScore.growthScore,
-      profitabilityScore: fundamentalScore.profitabilityScore,
-      valuationScore: fundamentalScore.valuationScore,
-      financialHealthScore: fundamentalScore.financialHealthScore,
-      riskScore: fundamentalScore.riskScore,
-      confidenceScore: confidenceScore.score,
-      dataCompletenessPercent: fundamentals.dataCompletenessPercent,
-    );
+      return CompanyComparison(
+        symbol: ticker,
+        companyName: profile.name,
+        industry: profile.industry,
+        investMindScore: combinedScore.score,
+        technicalScore: technicalScore.score,
+        fundamentalScore: fundamentalScore.score,
+        growthScore: fundamentalScore.growthScore,
+        profitabilityScore: fundamentalScore.profitabilityScore,
+        valuationScore: fundamentalScore.valuationScore,
+        financialHealthScore: fundamentalScore.financialHealthScore,
+        riskScore: fundamentalScore.riskScore,
+        confidenceScore: confidenceScore.score,
+        dataCompletenessPercent: fundamentals.dataCompletenessPercent,
+      );
+    } catch (error) {
+      throw Exception(
+        'Не удалось загрузить $ticker: '
+        '${_cleanError(error)}',
+      );
+    }
   }
 
   Future<List<CompanyComparison>> compareCompanies(List<String> symbols) async {
     final List<String> normalizedSymbols = symbols
         .map((symbol) => symbol.trim().toUpperCase())
         .where((symbol) => symbol.isNotEmpty)
-        .toSet()
         .toList();
 
     if (normalizedSymbols.length < 2) {
@@ -128,10 +134,20 @@ class ComparisonService {
       );
     }
 
+    final Set<String> uniqueSymbols = normalizedSymbols.toSet();
+
+    if (uniqueSymbols.length != normalizedSymbols.length) {
+      throw ArgumentError(
+        'Для сравнения нужно выбрать '
+        'разные компании.',
+      );
+    }
+
     final List<CompanyComparison> result = [];
 
-    // Загружаем последовательно, чтобы не создавать
-    // резкий пакет запросов к Finnhub.
+    // Загружаем компании последовательно,
+    // чтобы не отправлять сразу большой пакет
+    // запросов к Finnhub.
     for (final String symbol in normalizedSymbols) {
       final CompanyComparison company = await loadCompany(symbol);
 
@@ -139,5 +155,12 @@ class ComparisonService {
     }
 
     return result;
+  }
+
+  String _cleanError(Object error) {
+    return error
+        .toString()
+        .replaceFirst('Exception: ', '')
+        .replaceFirst('Invalid argument(s): ', '');
   }
 }
