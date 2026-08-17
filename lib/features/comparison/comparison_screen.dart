@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'company_comparison.dart';
+import 'comparison_insight_service.dart';
 import 'comparison_service.dart';
 
 class ComparisonScreen extends StatefulWidget {
@@ -13,10 +14,15 @@ class ComparisonScreen extends StatefulWidget {
 class _ComparisonScreenState extends State<ComparisonScreen> {
   final ComparisonService _comparisonService = ComparisonService();
 
+  final ComparisonInsightService _insightService =
+      const ComparisonInsightService();
+
   final TextEditingController _firstController = TextEditingController();
+
   final TextEditingController _secondController = TextEditingController();
 
   bool _isLoading = false;
+
   String? _error;
 
   List<CompanyComparison> _companies = [];
@@ -165,7 +171,9 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
                   ),
                 ),
               ),
+
               const SizedBox(width: 12),
+
               Expanded(
                 child: TextField(
                   controller: _secondController,
@@ -236,12 +244,16 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.compare_arrows, size: 64, color: Color(0xFF20D3C2)),
+
             SizedBox(height: 16),
+
             Text(
               'Выбери две компании',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
+
             SizedBox(height: 10),
+
             Text(
               'Например: NVDA и AMD, '
               'KO и PEP, JPM и BAC.',
@@ -258,7 +270,6 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
     return ListView(
       children: [
         _buildCompanyHeader(),
-
         const SizedBox(height: 16),
 
         _buildScoreRow(
@@ -320,7 +331,66 @@ class _ComparisonScreenState extends State<ComparisonScreen> {
           first: _companies[0].dataCompletenessPercent,
           second: _companies[1].dataCompletenessPercent,
         ),
+
+        const SizedBox(height: 16),
+
+        _buildInsightCard(),
+
+        const SizedBox(height: 24),
       ],
+    );
+  }
+
+  Widget _buildInsightCard() {
+    final String summary = _insightService.buildSummary(
+      _companies[0],
+      _companies[1],
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.lightbulb_outline, color: Color(0xFF20D3C2)),
+
+              SizedBox(width: 10),
+
+              Text(
+                'Вывод InvestMind',
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          Text(
+            summary,
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.55,
+              color: Colors.white70,
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          const Text(
+            'Вывод основан только на рассчитанных '
+            'показателях InvestMind и не является '
+            'рекомендацией купить или продать актив.',
+            style: TextStyle(fontSize: 12, color: Colors.white38),
+          ),
+        ],
+      ),
     );
   }
 
