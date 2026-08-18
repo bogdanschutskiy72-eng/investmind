@@ -95,7 +95,6 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 16),
 
                   Row(
@@ -128,18 +127,6 @@ class HomeScreen extends StatelessWidget {
                         icon: Icons.lightbulb_outline,
                         title: 'InvestMind AI',
                         onTap: () => onSelectPage(5),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  Row(
-                    children: [
-                      FeatureTile(
-                        icon: Icons.compare_arrows,
-                        title: 'Сравнение',
-                        onTap: () => onSelectPage(6),
                       ),
                     ],
                   ),

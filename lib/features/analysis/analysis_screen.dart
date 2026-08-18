@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../comparison/comparison_screen.dart';
 import 'company_analysis_screen.dart';
 
 class AnalysisScreen extends StatelessWidget {
@@ -8,33 +9,26 @@ class AnalysisScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Анализы'),
-      ),
+      appBar: AppBar(title: const Text('Анализы')),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 1200,
-            ),
+            constraints: const BoxConstraints(maxWidth: 1200),
             child: ListView(
               padding: const EdgeInsets.all(24),
               children: [
                 const Text(
                   'InvestMind Intelligence',
-                  style: TextStyle(
-                    fontSize: 30,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
                 ),
+
                 const SizedBox(height: 8),
+
                 const Text(
                   'Данные вместо шума. Анализ вместо эмоций.',
-                  style: TextStyle(
-                    fontSize: 17,
-                    color: Colors.white60,
-                  ),
+                  style: TextStyle(fontSize: 17, color: Colors.white60),
                 ),
+
                 const SizedBox(height: 28),
 
                 _AnalysisCard(
@@ -47,8 +41,7 @@ class AnalysisScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            const CompanyAnalysisScreen(),
+                        builder: (_) => const CompanyAnalysisScreen(),
                       ),
                     );
                   },
@@ -63,10 +56,7 @@ class AnalysisScreen extends StatelessWidget {
                       'Концентрация активов, распределение риска '
                       'и зависимость от отдельных отраслей.',
                   onTap: () {
-                    _showComingSoon(
-                      context,
-                      'Анализ портфеля',
-                    );
+                    _showComingSoon(context, 'Анализ портфеля');
                   },
                 ),
 
@@ -76,12 +66,15 @@ class AnalysisScreen extends StatelessWidget {
                   icon: Icons.compare_arrows,
                   title: 'Сравнение компаний',
                   description:
-                      'Сравнение нескольких компаний по ключевым '
-                      'показателям и рискам.',
+                      'Сравнение от 2 до 4 компаний по '
+                      'InvestMind Score, фундаментальным, '
+                      'техническим показателям и AI-анализу.',
                   onTap: () {
-                    _showComingSoon(
+                    Navigator.push(
                       context,
-                      'Сравнение компаний',
+                      MaterialPageRoute(
+                        builder: (_) => const ComparisonScreen(),
+                      ),
                     );
                   },
                 ),
@@ -95,10 +88,7 @@ class AnalysisScreen extends StatelessWidget {
                       'Будущий ИИ-помощник для вопросов о компаниях, '
                       'рынке и собственном портфеле.',
                   onTap: () {
-                    _showComingSoon(
-                      context,
-                      'InvestMind AI',
-                    );
+                    _showComingSoon(context, 'InvestMind AI');
                   },
                 ),
 
@@ -113,19 +103,16 @@ class AnalysisScreen extends StatelessWidget {
                   child: const Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.shield_outlined,
-                        color: Color(0xFF20D3C2),
-                      ),
+                      Icon(Icons.shield_outlined, color: Color(0xFF20D3C2)),
+
                       SizedBox(width: 14),
+
                       Expanded(
-                        child: Text('ИИ InvestMind будет объяснять данные и риски, '
+                        child: Text(
+                          'ИИ InvestMind будет объяснять данные и риски, '
                           'но не сможет самостоятельно совершать сделки '
                           'или управлять деньгами пользователя.',
-                          style: TextStyle(
-                            height: 1.5,
-                            color: Colors.white70,
-                          ),
+                          style: TextStyle(height: 1.5, color: Colors.white70),
                         ),
                       ),
                     ],
@@ -139,15 +126,10 @@ class AnalysisScreen extends StatelessWidget {
     );
   }
 
-  static void _showComingSoon(
-    BuildContext context,
-    String feature,
-  ) {
+  static void _showComingSoon(BuildContext context, String feature) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          '$feature — модуль готовится к подключению.',
-        ),
+        content: Text('$feature — модуль готовится к подключению.'),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -184,18 +166,14 @@ class _AnalysisCard extends StatelessWidget {
               width: 54,
               height: 54,
               decoration: BoxDecoration(
-                color: const Color(
-                  0xFF20D3C2,
-                ).withValues(alpha: 0.12),
+                color: const Color(0xFF20D3C2).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Icon(
-                icon,
-                color: const Color(0xFF20D3C2),
-                size: 28,
-              ),
+              child: Icon(icon, color: const Color(0xFF20D3C2), size: 28),
             ),
+
             const SizedBox(width: 18),
+
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -207,22 +185,20 @@ class _AnalysisCard extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+
                   const SizedBox(height: 6),
+
                   Text(
                     description,
-                    style: const TextStyle(
-                      color: Colors.white60,
-                      height: 1.4,
-                    ),
+                    style: const TextStyle(color: Colors.white60, height: 1.4),
                   ),
                 ],
               ),
             ),
+
             const SizedBox(width: 12),
-            const Icon(
-              Icons.chevron_right,
-              color: Colors.white38,
-            ),
+
+            const Icon(Icons.chevron_right, color: Colors.white38),
           ],
         ),
       ),
