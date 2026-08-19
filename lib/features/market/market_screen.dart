@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:flutter/gestures.dart';
 import '../../company/company_screen.dart';
 import '../../services/stock_service.dart';
+import '../comparison/company_comparison.dart';
+import '../comparison/comparison_service.dart';
 
 class MarketScreen extends StatefulWidget {
   const MarketScreen({super.key});
@@ -14,7 +17,10 @@ class MarketScreen extends StatefulWidget {
 
 class _MarketScreenState extends State<MarketScreen> {
   final StockService _stockService = StockService();
+  final ComparisonService _comparisonService = ComparisonService();
+
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _sectorScrollController = ScrollController();
 
   Timer? _searchTimer;
 
@@ -24,6 +30,10 @@ class _MarketScreenState extends State<MarketScreen> {
 
   String _selectedSector = 'Все';
   _MarketSortMode _sortMode = _MarketSortMode.changeDescending;
+
+  bool _isInvestMindScanning = false;
+  String? _investMindScanError;
+  List<_InvestMindScanRow> _investMindRows = [];
 
   final List<_MarketCompany> _companies = const [
     _MarketCompany(name: 'NVIDIA', symbol: 'NVDA', sector: 'Полупроводники'),
@@ -58,10 +68,33 @@ class _MarketScreenState extends State<MarketScreen> {
   }
 
   List<String> get _sectors {
-    final sectors = _companies.map((company) => company.sector).toSet().toList()
-      ..sort();
+    return const [
+      'Все',
+      'Полупроводники',
+      'Программное обеспечение',
+      'Интернет и реклама',
+      'Электроника',
+      'Автомобили',
+      'Банки',
+      'Финансы',
+      'Энергетика',
+      'Здравоохранение',
+      'Потребительский сектор',
+      'Промышленность',
+      'Телеком',
+      'Недвижимость',
+      'Utilities',
+    ];
+  }
 
-    return ['Все', ...sectors];
+  List<_MarketCompany> get _selectedCompanies {
+    if (_selectedSector == 'Все') {
+      return List<_MarketCompany>.from(_companies);
+    }
+
+    return _companies
+        .where((company) => company.sector == _selectedSector)
+        .toList();
   }
 
   @override
@@ -74,6 +107,7 @@ class _MarketScreenState extends State<MarketScreen> {
   void dispose() {
     _searchTimer?.cancel();
     _searchController.dispose();
+    _sectorScrollController.dispose();
     super.dispose();
   }
 
@@ -110,6 +144,9 @@ class _MarketScreenState extends State<MarketScreen> {
 
   void _refreshAll() {
     setState(() {
+      _investMindRows = [];
+      _investMindScanError = null;
+
       _loadQuotes();
     });
   }
@@ -168,7 +205,7 @@ class _MarketScreenState extends State<MarketScreen> {
       setState(() {
         _searchResults = [];
         _isSearching = false;
-        _searchError = error.toString();
+        _searchError = _cleanError(error);
       });
     }
   }
@@ -212,6 +249,168 @@ class _MarketScreenState extends State<MarketScreen> {
       context,
       MaterialPageRoute(builder: (_) => CompanyScreen(company: result.symbol)),
     );
+  }
+
+  String _cleanError(Object error) {
+    return error
+        .toString()
+        .replaceFirst('Exception: ', '')
+        .replaceFirst('Invalid argument(s): ', '');
+  }
+
+  Future<void> _runInvestMindScanner() async {
+    if (_isInvestMindScanning) {
+      return;
+    }
+
+    final companies = _selectedCompanies;
+
+    if (companies.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isInvestMindScanning = true;
+      _investMindScanError = null;
+      _investMindRows = [];
+    });
+
+    final List<_InvestMindScanRow> result = [];
+    final List<String> failedSymbols = [];
+
+    for (final company in companies) {
+      try {
+        final analysis = await _comparisonService.loadCompany(company.symbol);
+
+        result.add(
+          _InvestMindScanRow(
+            company: company,
+            analysis: analysis,
+            signals: _buildSignals(analysis),
+          ),
+        );
+
+        if (mounted) {
+          setState(() {
+            _investMindRows = List<_InvestMindScanRow>.from(result);
+          });
+        }
+      } catch (_) {
+        failedSymbols.add(company.symbol);
+      }
+    }
+
+    result.sort(
+      (a, b) =>
+          b.analysis.investMindScore.compareTo(a.analysis.investMindScore),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _investMindRows = result;
+      _isInvestMindScanning = false;
+
+      if (result.isEmpty) {
+        _investMindScanError = 'Не удалось выполнить InvestMind Scanner.';
+      } else if (failedSymbols.isNotEmpty) {
+        _investMindScanError =
+            'Часть компаний не удалось проанализировать: '
+            '${failedSymbols.join(', ')}.';
+      }
+    });
+  }
+
+  List<_InvestMindSignal> _buildSignals(CompanyComparison company) {
+    final List<_InvestMindSignal> signals = [];
+
+    if (company.fundamentalScore >= 70) {
+      signals.add(
+        const _InvestMindSignal(
+          type: _InvestMindSignalType.strongFundamental,
+          label: 'Сильныйентал',
+          icon: Icons.account_balance,
+        ),
+      );
+    }
+
+    if (company.growthScore >= 75) {
+      signals.add(
+        const _InvestMindSignal(
+          type: _InvestMindSignalType.strongGrowth,
+          label: 'Сильный рост',
+          icon: Icons.trending_up,
+        ),
+      );
+    }
+
+    if (company.valuationScore >= 70) {
+      signals.add(
+        const _InvestMindSignal(
+          type: _InvestMindSignalType.attractiveValuation,
+          label: 'Сильная оценка',
+          icon: Icons.sell_outlined,
+        ),
+      );
+    }
+
+    if (company.technicalScore >= 70) {
+      signals.add(
+        const _InvestMindSignal(
+          type: _InvestMindSignalType.technicalStrength,
+          label: 'Техническая сила',
+          icon: Icons.show_chart,
+        ),
+      );
+    }
+
+    if (company.riskScore <= 35) {
+      signals.add(
+        const _InvestMindSignal(
+          type: _InvestMindSignalType.elevatedRisk,
+          label: 'Повышенный риск',
+          icon: Icons.warning_amber_rounded,
+        ),
+      );
+    }
+
+    if (company.confidenceScore < 70) {
+      signals.add(
+        const _InvestMindSignal(
+          type: _InvestMindSignalType.lowConfidence,
+          label: 'Низкая уверенность данных',
+          icon: Icons.help_outline,
+        ),
+      );
+    }
+
+    final scoreGap = company.fundamentalScore - company.technicalScore;
+
+    if (scoreGap >= 20) {
+      signals.add(
+        const _InvestMindSignal(
+          type: _InvestMindSignalType.fundamentalTechnicalGap,
+          label: 'Фундаментал сильнее техники',
+          icon: Icons.compare_arrows,
+        ),
+      );
+    }
+
+    final growthValuationGap = company.growthScore - company.valuationScore;
+
+    if (growthValuationGap >= 30) {
+      signals.add(
+        const _InvestMindSignal(
+          type: _InvestMindSignalType.growthValuationGap,
+          label: 'Рост дороже оценки',
+          icon: Icons.balance,
+        ),
+      );
+    }
+
+    return signals;
   }
 
   Widget _buildSearchField() {
@@ -271,25 +470,68 @@ class _MarketScreenState extends State<MarketScreen> {
 
         const SizedBox(height: 18),
 
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: _sectors.map((sector) {
-              final selected = sector == _selectedSector;
+        SizedBox(
+          height: 46,
+          child: Listener(
+            onPointerSignal: (event) {
+              if (event is PointerScrollEvent &&
+                  _sectorScrollController.hasClients) {
+                GestureBinding.instance.pointerSignalResolver.register(event, (
+                  resolvedEvent,
+                ) {
+                  if (resolvedEvent is! PointerScrollEvent) {
+                    return;
+                  }
 
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ChoiceChip(
-                  label: Text(sector),
-                  selected: selected,
-                  onSelected: (_) {
-                    setState(() {
-                      _selectedSector = sector;
-                    });
-                  },
+                  final currentOffset = _sectorScrollController.offset;
+
+                  final maxOffset =
+                      _sectorScrollController.position.maxScrollExtent;
+
+                  final targetOffset =
+                      currentOffset + resolvedEvent.scrollDelta.dy;
+
+                  _sectorScrollController.jumpTo(
+                    targetOffset.clamp(0.0, maxOffset),
+                  );
+                });
+              }
+            },
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(context).copyWith(
+                dragDevices: {
+                  PointerDeviceKind.touch,
+                  PointerDeviceKind.mouse,
+                  PointerDeviceKind.trackpad,
+                  PointerDeviceKind.stylus,
+                },
+              ),
+              child: SingleChildScrollView(
+                controller: _sectorScrollController,
+                scrollDirection: Axis.horizontal,
+                physics: const ClampingScrollPhysics(),
+                child: Row(
+                  children: _sectors.map((sector) {
+                    final selected = sector == _selectedSector;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(sector),
+                        selected: selected,
+                        onSelected: (_) {
+                          setState(() {
+                            _selectedSector = sector;
+                            _investMindRows = [];
+                            _investMindScanError = null;
+                          });
+                        },
+                      ),
+                    );
+                  }).toList(),
                 ),
-              );
-            }).toList(),
+              ),
+            ),
           ),
         ),
 
@@ -540,6 +782,7 @@ class _MarketScreenState extends State<MarketScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+
                 const SizedBox(height: 3),
 
                 Text(
@@ -659,8 +902,381 @@ class _MarketScreenState extends State<MarketScreen> {
 
   String _percentText(double value) {
     final sign = value >= 0 ? '+' : '';
-
     return '$sign${value.toStringAsFixed(2)}%';
+  }
+
+  Widget _buildInvestMindScanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.psychology_outlined, color: Color(0xFF20D3C2)),
+
+              SizedBox(width: 10),
+
+              Text(
+                'InvestMind Scanner',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          Text(
+            _selectedSector == 'Все'
+                ? 'Проанализировать текущую группу компаний '
+                      'по рассчитанным показателям InvestMind.'
+                : 'Проанализировать сектор '
+                      '«$_selectedSector» по показателям InvestMind.',
+            style: const TextStyle(color: Colors.white60, height: 1.45),
+          ),
+
+          const SizedBox(height: 16),
+
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isInvestMindScanning ? null : _runInvestMindScanner,
+              icon: _isInvestMindScanning
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.radar),
+              label: Text(
+                _isInvestMindScanning
+                    ? 'Сканируем...'
+                    : 'Запустить InvestMind Scanner',
+              ),
+            ),
+          ),
+
+          if (_isInvestMindScanning) ...[
+            const SizedBox(height: 14),
+
+            const LinearProgressIndicator(color: Color(0xFF20D3C2)),
+
+            const SizedBox(height: 10),
+
+            Text(
+              'Обработано: ${_investMindRows.length} '
+              'из ${_selectedCompanies.length}',
+              style: const TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+          ],
+
+          if (_investMindScanError != null) ...[
+            const SizedBox(height: 14),
+
+            Text(
+              _investMindScanError!,
+              style: const TextStyle(color: Colors.orangeAccent),
+            ),
+          ],
+
+          if (_investMindRows.isNotEmpty) ...[
+            const SizedBox(height: 22),
+
+            _buildInvestMindSummary(),
+
+            const SizedBox(height: 18),
+
+            ..._investMindRows.map(_buildInvestMindResultCard),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInvestMindSummary() {
+    final rows = List<_InvestMindScanRow>.from(_investMindRows);
+
+    rows.sort(
+      (a, b) =>
+          b.analysis.investMindScore.compareTo(a.analysis.investMindScore),
+    );
+
+    final leader = rows.first;
+
+    final highestFundamental = rows.reduce(
+      (current, next) =>
+          current.analysis.fundamentalScore > next.analysis.fundamentalScore
+          ? current
+          : next,
+    );
+
+    final highestTechnical = rows.reduce(
+      (current, next) =>
+          current.analysis.technicalScore > next.analysis.technicalScore
+          ? current
+          : next,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 750;
+
+        final cards = [
+          _buildInvestMindSummaryCard(
+            title: 'Лучший InvestMind Score',
+            symbol: leader.company.symbol,
+            value: '${leader.analysis.investMindScore}/100',
+          ),
+          _buildInvestMindSummaryCard(
+            title: 'Лучший фундаментал в группе',
+            symbol: highestFundamental.company.symbol,
+            value: '${highestFundamental.analysis.fundamentalScore}/100',
+          ),
+          _buildInvestMindSummaryCard(
+            title: 'Лучшая техника в группе',
+            symbol: highestTechnical.company.symbol,
+            value: '${highestTechnical.analysis.technicalScore}/100',
+          ),
+        ];
+
+        if (compact) {
+          return Column(
+            children: [
+              for (final card in cards) ...[card, const SizedBox(height: 10)],
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            for (var index = 0; index < cards.length; index++) ...[
+              Expanded(child: cards[index]),
+              if (index < cards.length - 1) const SizedBox(width: 10),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildInvestMindSummaryCard({
+    required String title,
+    required String symbol,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(color: Colors.white54, fontSize: 11),
+          ),
+
+          const SizedBox(height: 5),
+
+          Text(
+            symbol,
+            style: const TextStyle(
+              color: Color(0xFF20D3C2),
+              fontWeight: FontWeight.bold,
+              fontSize: 17,
+            ),
+          ),
+
+          const SizedBox(height: 4),
+
+          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInvestMindResultCard(_InvestMindScanRow row) {
+    final analysis = row.analysis;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      row.company.symbol,
+                      style: const TextStyle(
+                        color: Color(0xFF20D3C2),
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    const SizedBox(height: 3),
+
+                    Text(
+                      row.company.name,
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF20D3C2).withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${analysis.investMindScore}/100',
+                  style: const TextStyle(
+                    color: Color(0xFF20D3C2),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildScoreBadge('Tech', analysis.technicalScore),
+              _buildScoreBadge('Fund', analysis.fundamentalScore),
+              _buildScoreBadge('Growth', analysis.growthScore),
+              _buildScoreBadge('Value', analysis.valuationScore),
+              _buildScoreBadge('Risk', analysis.riskScore),
+              _buildPercentBadge('Conf', analysis.confidenceScore),
+            ],
+          ),
+
+          if (row.signals.isNotEmpty) ...[
+            const SizedBox(height: 14),
+
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: row.signals.map(_buildSignalChip).toList(),
+            ),
+          ],
+
+          const SizedBox(height: 12),
+
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => _openCompany(row.company),
+              icon: const Icon(Icons.arrow_forward, size: 17),
+              label: const Text('Открыть компанию'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScoreBadge(String label, int score) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.045),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        '$label $score',
+        style: const TextStyle(fontSize: 11, color: Colors.white70),
+      ),
+    );
+  }
+
+  Widget _buildPercentBadge(String label, int value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.045),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        '$label $value%',
+        style: const TextStyle(fontSize: 11, color: Colors.white70),
+      ),
+    );
+  }
+
+  Widget _buildSignalChip(_InvestMindSignal signal) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: _signalColor(signal.type).withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _signalColor(signal.type).withValues(alpha: 0.25),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(signal.icon, size: 15, color: _signalColor(signal.type)),
+
+          const SizedBox(width: 6),
+
+          Text(
+            signal.label,
+            style: TextStyle(
+              fontSize: 11,
+              color: _signalColor(signal.type),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _signalColor(_InvestMindSignalType type) {
+    switch (type) {
+      case _InvestMindSignalType.strongFundamental:
+      case _InvestMindSignalType.strongGrowth:
+      case _InvestMindSignalType.attractiveValuation:
+      case _InvestMindSignalType.technicalStrength:
+        return const Color(0xFF20D3C2);
+
+      case _InvestMindSignalType.elevatedRisk:
+        return Colors.orangeAccent;
+
+      case _InvestMindSignalType.lowConfidence:
+        return Colors.amberAccent;
+
+      case _InvestMindSignalType.fundamentalTechnicalGap:
+      case _InvestMindSignalType.growthValuationGap:
+        return Colors.lightBlueAccent;
+    }
   }
 
   Widget _buildScannerError() {
@@ -863,6 +1479,12 @@ class _MarketScreenState extends State<MarketScreen> {
         const SizedBox(height: 20),
 
         _buildScanner(),
+
+        const SizedBox(height: 40),
+
+        _buildInvestMindScanner(),
+
+        const SizedBox(height: 24),
       ],
     );
   }
@@ -909,6 +1531,17 @@ enum _MarketSortMode {
   name,
 }
 
+enum _InvestMindSignalType {
+  strongFundamental,
+  strongGrowth,
+  attractiveValuation,
+  technicalStrength,
+  elevatedRisk,
+  lowConfidence,
+  fundamentalTechnicalGap,
+  growthValuationGap,
+}
+
 class _MarketCompany {
   final String name;
   final String symbol;
@@ -926,4 +1559,28 @@ class _MarketQuoteRow {
   final StockQuote quote;
 
   const _MarketQuoteRow({required this.company, required this.quote});
+}
+
+class _InvestMindSignal {
+  final _InvestMindSignalType type;
+  final String label;
+  final IconData icon;
+
+  const _InvestMindSignal({
+    required this.type,
+    required this.label,
+    required this.icon,
+  });
+}
+
+class _InvestMindScanRow {
+  final _MarketCompany company;
+  final CompanyComparison analysis;
+  final List<_InvestMindSignal> signals;
+
+  const _InvestMindScanRow({
+    required this.company,
+    required this.analysis,
+    required this.signals,
+  });
 }
