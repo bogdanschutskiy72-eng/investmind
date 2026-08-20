@@ -1,12 +1,14 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-import 'package:flutter/gestures.dart';
 import '../../company/company_screen.dart';
 import '../../services/stock_service.dart';
 import '../comparison/company_comparison.dart';
 import '../comparison/comparison_service.dart';
+import 'market_catalog.dart';
+import 'market_company.dart';
 
 class MarketScreen extends StatefulWidget {
   const MarketScreen({super.key});
@@ -20,7 +22,9 @@ class _MarketScreenState extends State<MarketScreen> {
   final ComparisonService _comparisonService = ComparisonService();
 
   final TextEditingController _searchController = TextEditingController();
+
   final ScrollController _sectorScrollController = ScrollController();
+  final ScrollController _investMindFilterScrollController = ScrollController();
 
   Timer? _searchTimer;
 
@@ -35,29 +39,9 @@ class _MarketScreenState extends State<MarketScreen> {
   String? _investMindScanError;
   List<_InvestMindScanRow> _investMindRows = [];
 
-  final List<_MarketCompany> _companies = const [
-    _MarketCompany(name: 'NVIDIA', symbol: 'NVDA', sector: 'Полупроводники'),
-    _MarketCompany(
-      name: 'ASML',
-      symbol: 'ASML',
-      sector: 'Оборудование для чипов',
-    ),
-    _MarketCompany(name: 'TSMC', symbol: 'TSM', sector: 'Производство чипов'),
-    _MarketCompany(name: 'AMD', symbol: 'AMD', sector: 'Полупроводники'),
-    _MarketCompany(
-      name: 'Microsoft',
-      symbol: 'MSFT',
-      sector: 'Программное обеспечение',
-    ),
-    _MarketCompany(name: 'Apple', symbol: 'AAPL', sector: 'Электроника'),
-    _MarketCompany(
-      name: 'Amazon',
-      symbol: 'AMZN',
-      sector: 'Электронная коммерция',
-    ),
-    _MarketCompany(name: 'Meta', symbol: 'META', sector: 'Интернет и реклама'),
-    _MarketCompany(name: 'Tesla', symbol: 'TSLA', sector: 'Автомобили'),
-  ];
+  _InvestMindFilter _investMindFilter = _InvestMindFilter.all;
+
+  final List<MarketCompany> _companies = marketCompanies;
 
   Map<String, Future<StockQuote>> _quoteFutures = {};
 
@@ -68,33 +52,74 @@ class _MarketScreenState extends State<MarketScreen> {
   }
 
   List<String> get _sectors {
-    return const [
-      'Все',
-      'Полупроводники',
-      'Программное обеспечение',
-      'Интернет и реклама',
-      'Электроника',
-      'Автомобили',
-      'Банки',
-      'Финансы',
-      'Энергетика',
-      'Здравоохранение',
-      'Потребительский сектор',
-      'Промышленность',
-      'Телеком',
-      'Недвижимость',
-      'Utilities',
-    ];
+    final sectors = _companies.map((company) => company.sector).toSet().toList()
+      ..sort();
+
+    return ['Все', ...sectors];
   }
 
-  List<_MarketCompany> get _selectedCompanies {
+  List<MarketCompany> get _selectedCompanies {
     if (_selectedSector == 'Все') {
-      return List<_MarketCompany>.from(_companies);
+      return List<MarketCompany>.from(_companies);
     }
 
     return _companies
         .where((company) => company.sector == _selectedSector)
         .toList();
+  }
+
+  List<_InvestMindScanRow> get _filteredInvestMindRows {
+    return _investMindRows
+        .where((row) => _matchesInvestMindFilter(row, _investMindFilter))
+        .toList();
+  }
+
+  bool _matchesInvestMindFilter(
+    _InvestMindScanRow row,
+    _InvestMindFilter filter,
+  ) {
+    switch (filter) {
+      case _InvestMindFilter.all:
+        return true;
+
+      case _InvestMindFilter.strongFundamental:
+        return row.signals.any(
+          (signal) => signal.type == _InvestMindSignalType.strongFundamental,
+        );
+
+      case _InvestMindFilter.strongGrowth:
+        return row.signals.any(
+          (signal) => signal.type == _InvestMindSignalType.strongGrowth,
+        );
+
+      case _InvestMindFilter.technicalStrength:
+        return row.signals.any(
+          (signal) => signal.type == _InvestMindSignalType.technicalStrength,
+        );
+
+      case _InvestMindFilter.attractiveValuation:
+        return row.signals.any(
+          (signal) => signal.type == _InvestMindSignalType.attractiveValuation,
+        );
+
+      case _InvestMindFilter.elevatedRisk:
+        return row.signals.any(
+          (signal) => signal.type == _InvestMindSignalType.elevatedRisk,
+        );
+
+      case _InvestMindFilter.divergences:
+        return row.signals.any(
+          (signal) =>
+              signal.type == _InvestMindSignalType.fundamentalTechnicalGap ||
+              signal.type == _InvestMindSignalType.growthValuationGap,
+        );
+    }
+  }
+
+  int _investMindFilterCount(_InvestMindFilter filter) {
+    return _investMindRows
+        .where((row) => _matchesInvestMindFilter(row, filter))
+        .length;
   }
 
   @override
@@ -108,6 +133,7 @@ class _MarketScreenState extends State<MarketScreen> {
     _searchTimer?.cancel();
     _searchController.dispose();
     _sectorScrollController.dispose();
+    _investMindFilterScrollController.dispose();
     super.dispose();
   }
 
@@ -135,7 +161,7 @@ class _MarketScreenState extends State<MarketScreen> {
 
         rows.add(_MarketQuoteRow(company: company, quote: quote));
       } catch (_) {
-        // Ошибка одной компании не должна ломать весь scanner.
+        // Ошибка одной компании не ломает весь Scanner.
       }
     }
 
@@ -146,6 +172,7 @@ class _MarketScreenState extends State<MarketScreen> {
     setState(() {
       _investMindRows = [];
       _investMindScanError = null;
+      _investMindFilter = _InvestMindFilter.all;
 
       _loadQuotes();
     });
@@ -237,7 +264,7 @@ class _MarketScreenState extends State<MarketScreen> {
     _refreshAll();
   }
 
-  void _openCompany(_MarketCompany company) {
+  void _openCompany(MarketCompany company) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => CompanyScreen(company: company.name)),
@@ -266,6 +293,11 @@ class _MarketScreenState extends State<MarketScreen> {
     final companies = _selectedCompanies;
 
     if (companies.isEmpty) {
+      setState(() {
+        _investMindScanError =
+            'В выбранном секторе пока нет компаний для анализа.';
+      });
+
       return;
     }
 
@@ -273,6 +305,7 @@ class _MarketScreenState extends State<MarketScreen> {
       _isInvestMindScanning = true;
       _investMindScanError = null;
       _investMindRows = [];
+      _investMindFilter = _InvestMindFilter.all;
     });
 
     final List<_InvestMindScanRow> result = [];
@@ -330,7 +363,7 @@ class _MarketScreenState extends State<MarketScreen> {
       signals.add(
         const _InvestMindSignal(
           type: _InvestMindSignalType.strongFundamental,
-          label: 'Сильныйентал',
+          label: 'Сильный фундаментал',
           icon: Icons.account_balance,
         ),
       );
@@ -522,8 +555,10 @@ class _MarketScreenState extends State<MarketScreen> {
                         onSelected: (_) {
                           setState(() {
                             _selectedSector = sector;
+
                             _investMindRows = [];
                             _investMindScanError = null;
+                            _investMindFilter = _InvestMindFilter.all;
                           });
                         },
                       ),
@@ -592,7 +627,7 @@ class _MarketScreenState extends State<MarketScreen> {
           );
         }
 
-        final allRows = snapshot.data ?? const [];
+        final allRows = snapshot.data ?? const <_MarketQuoteRow>[];
 
         if (allRows.isEmpty) {
           return _buildScannerError();
@@ -613,7 +648,7 @@ class _MarketScreenState extends State<MarketScreen> {
             padding: EdgeInsets.symmetric(vertical: 40),
             child: Center(
               child: Text(
-                'В выбранном секторе нет компаний.',
+                'В выбранном секторе пока нет компаний.',
                 style: TextStyle(color: Colors.white60),
               ),
             ),
@@ -902,10 +937,13 @@ class _MarketScreenState extends State<MarketScreen> {
 
   String _percentText(double value) {
     final sign = value >= 0 ? '+' : '';
+
     return '$sign${value.toStringAsFixed(2)}%';
   }
 
   Widget _buildInvestMindScanner() {
+    final filteredRows = _filteredInvestMindRows;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -919,9 +957,7 @@ class _MarketScreenState extends State<MarketScreen> {
           const Row(
             children: [
               Icon(Icons.psychology_outlined, color: Color(0xFF20D3C2)),
-
               SizedBox(width: 10),
-
               Text(
                 'InvestMind Scanner',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
@@ -991,7 +1027,14 @@ class _MarketScreenState extends State<MarketScreen> {
 
             const SizedBox(height: 18),
 
-            ..._investMindRows.map(_buildInvestMindResultCard),
+            _buildInvestMindFilters(),
+
+            const SizedBox(height: 18),
+
+            if (filteredRows.isEmpty)
+              _buildNoFilteredResults()
+            else
+              ...filteredRows.map(_buildInvestMindResultCard),
           ],
         ],
       ),
@@ -1061,6 +1104,130 @@ class _MarketScreenState extends State<MarketScreen> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildInvestMindFilters() {
+    final filters = [
+      _InvestMindFilter.all,
+      _InvestMindFilter.strongFundamental,
+      _InvestMindFilter.strongGrowth,
+      _InvestMindFilter.technicalStrength,
+      _InvestMindFilter.attractiveValuation,
+      _InvestMindFilter.elevatedRisk,
+      _InvestMindFilter.divergences,
+    ];
+
+    return SizedBox(
+      height: 46,
+      child: Listener(
+        onPointerSignal: (event) {
+          if (event is PointerScrollEvent &&
+              _investMindFilterScrollController.hasClients) {
+            GestureBinding.instance.pointerSignalResolver.register(event, (
+              resolvedEvent,
+            ) {
+              if (resolvedEvent is! PointerScrollEvent) {
+                return;
+              }
+
+              final currentOffset = _investMindFilterScrollController.offset;
+
+              final maxOffset =
+                  _investMindFilterScrollController.position.maxScrollExtent;
+
+              final targetOffset = currentOffset + resolvedEvent.scrollDelta.dy;
+
+              _investMindFilterScrollController.jumpTo(
+                targetOffset.clamp(0.0, maxOffset),
+              );
+            });
+          }
+        },
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(
+            dragDevices: {
+              PointerDeviceKind.touch,
+              PointerDeviceKind.mouse,
+              PointerDeviceKind.trackpad,
+              PointerDeviceKind.stylus,
+            },
+          ),
+          child: SingleChildScrollView(
+            controller: _investMindFilterScrollController,
+            scrollDirection: Axis.horizontal,
+            physics: const ClampingScrollPhysics(),
+            child: Row(
+              children: filters.map((filter) {
+                final selected = _investMindFilter == filter;
+
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(
+                      '${_investMindFilterLabel(filter)} '
+                      '(${_investMindFilterCount(filter)})',
+                    ),
+                    selected: selected,
+                    onSelected: (_) {
+                      setState(() {
+                        _investMindFilter = filter;
+                      });
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _investMindFilterLabel(_InvestMindFilter filter) {
+    switch (filter) {
+      case _InvestMindFilter.all:
+        return 'Все';
+
+      case _InvestMindFilter.strongFundamental:
+        return 'Сильный фундаментал';
+
+      case _InvestMindFilter.strongGrowth:
+        return 'Сильный рост';
+
+      case _InvestMindFilter.technicalStrength:
+        return 'Сильная техника';
+
+      case _InvestMindFilter.attractiveValuation:
+        return 'Сильная оценка';
+
+      case _InvestMindFilter.elevatedRisk:
+        return 'Повышенный риск';
+
+      case _InvestMindFilter.divergences:
+        return 'Расхождения';
+    }
+  }
+
+  Widget _buildNoFilteredResults() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Column(
+        children: [
+          Icon(Icons.filter_alt_off_outlined, color: Colors.white38, size: 34),
+          SizedBox(height: 10),
+          Text(
+            'Компаний с таким сигналом не найдено.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white60),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1542,20 +1709,18 @@ enum _InvestMindSignalType {
   growthValuationGap,
 }
 
-class _MarketCompany {
-  final String name;
-  final String symbol;
-  final String sector;
-
-  const _MarketCompany({
-    required this.name,
-    required this.symbol,
-    required this.sector,
-  });
+enum _InvestMindFilter {
+  all,
+  strongFundamental,
+  strongGrowth,
+  technicalStrength,
+  attractiveValuation,
+  elevatedRisk,
+  divergences,
 }
 
 class _MarketQuoteRow {
-  final _MarketCompany company;
+  final MarketCompany company;
   final StockQuote quote;
 
   const _MarketQuoteRow({required this.company, required this.quote});
@@ -1574,7 +1739,7 @@ class _InvestMindSignal {
 }
 
 class _InvestMindScanRow {
-  final _MarketCompany company;
+  final MarketCompany company;
   final CompanyComparison analysis;
   final List<_InvestMindSignal> signals;
 
