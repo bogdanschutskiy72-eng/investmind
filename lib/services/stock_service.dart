@@ -75,9 +75,17 @@ class StockSearchResult {
 class StockService {
   static const String _apiKey = String.fromEnvironment('FINNHUB_API_KEY');
 
-  static const Duration _cacheDuration = Duration(seconds: 45);
+  static const Duration _cacheDuration = Duration(seconds: 60);
 
   static const int _maxAttempts = 2;
+
+  // Не отправляем большой пакет запросов в Finnhub одновременно.
+  // Все HTTP-запросы этого сервиса проходят через одну очередь.
+  static const Duration _minimumRequestInterval = Duration(milliseconds: 1100);
+
+  static DateTime? _lastRequestAt;
+
+  static Future<void> _requestQueue = Future<void>.value();
 
   static final Map<String, _CachedQuote> _quoteCache = <String, _CachedQuote>{};
 
@@ -143,7 +151,10 @@ class StockService {
         return staleQuote;
       }
 
-      throw Exception('Finnhub временно не отвечает. Повтори позже.');
+      throw Exception(
+        'Finnhub временно не отвечает. '
+        'Повтори позже.',
+      );
     } on http.ClientException {
       if (staleQuote != null) {
         return staleQuote;
@@ -169,22 +180,26 @@ class StockService {
     }
 
     if (response.statusCode == 429) {
-      throw _TemporaryStockException('Превышен лимит запросов Finnhub.');
+      throw const _TemporaryStockException('Превышен лимит запросов Finnhub.');
     }
 
     if (response.statusCode >= 500) {
-      throw _TemporaryStockException('Finnhub временно недоступен.');
+      throw const _TemporaryStockException('Finnhub временно недоступен.');
     }
 
     if (response.statusCode != 200) {
-      throw Exception('Ошибка Finnhub: HTTP ${response.statusCode}');
+      throw Exception(
+        'Ошибка Finnhub: '
+        'HTTP ${response.statusCode}',
+      );
     }
 
     final decoded = jsonDecode(response.body);
 
     if (decoded is! Map<String, dynamic>) {
       throw const FormatException(
-        'Finnhub вернул данные неизвестного формата.',
+        'Finnhub вернул данные '
+        'неизвестного формата.',
       );
     }
 
@@ -241,7 +256,10 @@ class StockService {
     final decoded = jsonDecode(response.body);
 
     if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Finnhub вернул неизвестный формат поиска.');
+      throw const FormatException(
+        'Finnhub вернул неизвестный '
+        'формат поиска.',
+      );
     }
 
     final rawResults = decoded['result'];
@@ -263,9 +281,7 @@ class StockService {
 
     for (var attempt = 1; attempt <= _maxAttempts; attempt++) {
       try {
-        final response = await http
-            .get(uri)
-            .timeout(const Duration(seconds: 15));
+        final response = await _rateLimitedGet(uri);
 
         final temporaryError =
             response.statusCode == 429 || response.statusCode >= 500;
@@ -305,6 +321,43 @@ class StockService {
     }
 
     throw Exception('Не удалось получить данные Finnhub.');
+  }
+
+  Future<http.Response> _rateLimitedGet(Uri uri) {
+    final completer = Completer<http.Response>();
+
+    _requestQueue = _requestQueue
+        .then((_) async {
+          try {
+            final lastRequest = _lastRequestAt;
+
+            if (lastRequest != null) {
+              final elapsed = DateTime.now().difference(lastRequest);
+
+              final remaining = _minimumRequestInterval - elapsed;
+
+              if (remaining > Duration.zero) {
+                await Future<void>.delayed(remaining);
+              }
+            }
+
+            _lastRequestAt = DateTime.now();
+
+            final response = await http
+                .get(uri)
+                .timeout(const Duration(seconds: 15));
+
+            completer.complete(response);
+          } catch (error, stackTrace) {
+            completer.completeError(error, stackTrace);
+          }
+        })
+        .catchError((_) {
+          // Не позволяем ошибке одной операции
+          // сломать очередь следующих запросов.
+        });
+
+    return completer.future;
   }
 
   void clearQuoteCache([String? symbol]) {

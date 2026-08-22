@@ -42,7 +42,7 @@ class _MarketScreenState extends State<MarketScreen> {
   _InvestMindFilter _investMindFilter = _InvestMindFilter.all;
 
   final List<MarketCompany> _companies = marketCompanies;
-
+  static const int _allMarketLimit = 20;
   Map<String, Future<StockQuote>> _quoteFutures = {};
 
   Future<List<_MarketQuoteRow>>? _scannerFuture;
@@ -66,6 +66,14 @@ class _MarketScreenState extends State<MarketScreen> {
     return _companies
         .where((company) => company.sector == _selectedSector)
         .toList();
+  }
+
+  List<MarketCompany> get _visibleMarketCompanies {
+    if (_selectedSector == 'Все') {
+      return _companies.take(_allMarketLimit).toList();
+    }
+
+    return _selectedCompanies;
   }
 
   List<_InvestMindScanRow> get _filteredInvestMindRows {
@@ -138,18 +146,22 @@ class _MarketScreenState extends State<MarketScreen> {
   }
 
   void _loadQuotes() {
+    final companies = _visibleMarketCompanies;
+
     _quoteFutures = {
-      for (final company in _companies)
+      for (final company in companies)
         company.symbol: _stockService.fetchQuote(company.symbol),
     };
 
-    _scannerFuture = _buildScannerRows();
+    _scannerFuture = _buildScannerRows(companies);
   }
 
-  Future<List<_MarketQuoteRow>> _buildScannerRows() async {
+  Future<List<_MarketQuoteRow>> _buildScannerRows(
+    List<MarketCompany> companies,
+  ) async {
     final List<_MarketQuoteRow> rows = [];
 
-    for (final company in _companies) {
+    for (final company in companies) {
       final future = _quoteFutures[company.symbol];
 
       if (future == null) {
@@ -290,7 +302,7 @@ class _MarketScreenState extends State<MarketScreen> {
       return;
     }
 
-    final companies = _selectedCompanies;
+    final companies = _visibleMarketCompanies;
 
     if (companies.isEmpty) {
       setState(() {
@@ -559,6 +571,8 @@ class _MarketScreenState extends State<MarketScreen> {
                             _investMindRows = [];
                             _investMindScanError = null;
                             _investMindFilter = _InvestMindFilter.all;
+
+                            _loadQuotes();
                           });
                         },
                       ),
