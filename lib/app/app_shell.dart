@@ -7,6 +7,7 @@ import '../features/home/home_screen.dart';
 import '../features/home/search/search_screen.dart';
 import '../features/market/market_screen.dart';
 import '../features/portfolio/portfolio_screen.dart';
+import '../features/pulse/pulse_screen.dart';
 import '../features/transactions/transactions_screen.dart';
 
 class AppShell extends StatefulWidget {
@@ -34,6 +35,7 @@ class _AppShellState extends State<AppShell> {
       const TransactionsScreen(),
       const AnalysisScreen(),
       const ComparisonScreen(),
+      const PulseScreen(),
       const SearchScreen(),
     ];
   }
@@ -53,7 +55,7 @@ class _AppShellState extends State<AppShell> {
               children: [
                 NavigationRail(
                   extended: isWideDesktop,
-                  selectedIndex: _selectedIndex > 6 ? 0 : _selectedIndex,
+                  selectedIndex: _selectedIndex > 7 ? 0 : _selectedIndex,
                   onDestinationSelected: _selectPage,
                   backgroundColor: const Color(0xFF0F172A),
                   indicatorColor: const Color(
@@ -129,15 +131,18 @@ class _AppShellState extends State<AppShell> {
                       selectedIcon: Icon(Icons.compare_arrows),
                       label: Text('Сравнение'),
                     ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.bolt_outlined),
+                      selectedIcon: Icon(Icons.bolt),
+                      label: Text('Pulse'),
+                    ),
                   ],
                 ),
-
                 const VerticalDivider(
                   width: 1,
                   thickness: 1,
                   color: Color(0xFF1E293B),
                 ),
-
                 Expanded(
                   child: IndexedStack(index: _selectedIndex, children: pages),
                 ),
@@ -149,7 +154,7 @@ class _AppShellState extends State<AppShell> {
         return Scaffold(
           body: IndexedStack(index: _selectedIndex, children: pages),
           bottomNavigationBar: NavigationBar(
-            selectedIndex: _selectedIndex > 6 ? 0 : _selectedIndex,
+            selectedIndex: _selectedIndex > 7 ? 0 : _selectedIndex,
             onDestinationSelected: _selectPage,
             destinations: const [
               NavigationDestination(
@@ -186,6 +191,11 @@ class _AppShellState extends State<AppShell> {
                 icon: Icon(Icons.compare_arrows_outlined),
                 selectedIcon: Icon(Icons.compare_arrows),
                 label: 'Сравнение',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.bolt_outlined),
+                selectedIcon: Icon(Icons.bolt),
+                label: 'Pulse',
               ),
             ],
           ),

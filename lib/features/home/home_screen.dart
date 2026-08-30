@@ -36,7 +36,7 @@ class HomeScreen extends StatelessWidget {
 
                   TextField(
                     readOnly: true,
-                    onTap: () => onSelectPage(7),
+                    onTap: () => onSelectPage(8),
                     decoration: InputDecoration(
                       hintText: 'Найти компанию...',
                       prefixIcon: const Icon(Icons.search),
@@ -87,7 +87,7 @@ class HomeScreen extends StatelessWidget {
                         title: 'Избранное',
                         onTap: () => onSelectPage(3),
                       ),
-                      const SizedBox(width: 16),
+                      SizedBox(width: 16),
                       FeatureTile(
                         icon: Icons.psychology,
                         title: 'Анализы',
@@ -95,6 +95,7 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 16),
 
                   Row(
@@ -104,7 +105,7 @@ class HomeScreen extends StatelessWidget {
                         title: 'Рынок',
                         onTap: () => onSelectPage(1),
                       ),
-                      const SizedBox(width: 16),
+                      SizedBox(width: 16),
                       FeatureTile(
                         icon: Icons.account_balance_wallet,
                         title: 'Портфель',
@@ -122,11 +123,11 @@ class HomeScreen extends StatelessWidget {
                         title: 'История',
                         onTap: () => onSelectPage(4),
                       ),
-                      const SizedBox(width: 16),
+                      SizedBox(width: 16),
                       FeatureTile(
-                        icon: Icons.lightbulb_outline,
-                        title: 'InvestMind AI',
-                        onTap: () => onSelectPage(5),
+                        icon: Icons.bolt,
+                        title: 'Pulse',
+                        onTap: () => onSelectPage(7),
                       ),
                     ],
                   ),

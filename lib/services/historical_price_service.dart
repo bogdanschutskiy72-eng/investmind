@@ -585,6 +585,41 @@ class HistoricalPriceService {
     );
   }
 
+  HistoricalPriceAnalysis? getCachedAnalysis(
+    String symbol, {
+    int days = 90,
+    bool allowExpired = true,
+  }) {
+    final ticker = symbol.trim().toUpperCase();
+
+    if (ticker.isEmpty) {
+      return null;
+    }
+
+    final cacheKey = '$ticker:$days';
+    final cached = _cache[cacheKey];
+
+    if (cached == null) {
+      return null;
+    }
+
+    if (!allowExpired && cached.isExpired) {
+      return null;
+    }
+
+    return cached.analysis;
+  }
+
+  bool hasCachedAnalysis(String symbol, {int days = 90}) {
+    final ticker = symbol.trim().toUpperCase();
+
+    if (ticker.isEmpty) {
+      return false;
+    }
+
+    return _cache.containsKey('$ticker:$days');
+  }
+
   void clearCache([String? symbol]) {
     if (symbol == null) {
       _cache.clear();
