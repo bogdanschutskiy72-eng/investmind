@@ -12,6 +12,7 @@ import 'market_catalog.dart';
 import 'market_company.dart';
 import 'market_signal.dart';
 import 'market_signal_service.dart';
+import 'opportunity_score_service.dart';
 
 class MarketScreen extends StatefulWidget {
   const MarketScreen({super.key});
@@ -26,6 +27,8 @@ class _MarketScreenState extends State<MarketScreen> {
   final HistoricalPriceService _historicalPriceService =
       HistoricalPriceService();
   final MarketSignalService _marketSignalService = const MarketSignalService();
+  final OpportunityScoreService _opportunityScoreService =
+      const OpportunityScoreService();
 
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _sectorScrollController = ScrollController();
@@ -46,6 +49,9 @@ class _MarketScreenState extends State<MarketScreen> {
   String? _investMindScanError;
   List<_InvestMindScanRow> _investMindRows = [];
   _InvestMindFilter _investMindFilter = _InvestMindFilter.all;
+  _OpportunityFilter _opportunityFilter = _OpportunityFilter.all;
+  _OpportunitySortMode _opportunitySortMode =
+      _OpportunitySortMode.opportunityDescending;
 
   final List<MarketCompany> _companies = marketCompanies;
 
@@ -84,9 +90,14 @@ class _MarketScreenState extends State<MarketScreen> {
   }
 
   List<_InvestMindScanRow> get _filteredInvestMindRows {
-    return _investMindRows
+    final rows = _investMindRows
         .where((row) => _matchesInvestMindFilter(row, _investMindFilter))
+        .where((row) => _matchesOpportunityFilter(row, _opportunityFilter))
         .toList();
+
+    _sortOpportunityRows(rows);
+
+    return rows;
   }
 
   bool _matchesInvestMindFilter(
@@ -129,6 +140,64 @@ class _MarketScreenState extends State<MarketScreen> {
     return _investMindRows
         .where((row) => _matchesInvestMindFilter(row, filter))
         .length;
+  }
+
+  bool _matchesOpportunityFilter(
+    _InvestMindScanRow row,
+    _OpportunityFilter filter,
+  ) {
+    final score = row.opportunity.score;
+
+    switch (filter) {
+      case _OpportunityFilter.all:
+        return true;
+      case _OpportunityFilter.highInterest:
+        return score >= 80;
+      case _OpportunityFilter.watch:
+        return score >= 65 && score < 80;
+      case _OpportunityFilter.neutral:
+        return score >= 50 && score < 65;
+      case _OpportunityFilter.weakInterest:
+        return score >= 35 && score < 50;
+      case _OpportunityFilter.lowInterest:
+        return score < 35;
+    }
+  }
+
+  int _opportunityFilterCount(_OpportunityFilter filter) {
+    return _investMindRows
+        .where((row) => _matchesOpportunityFilter(row, filter))
+        .length;
+  }
+
+  void _sortOpportunityRows(List<_InvestMindScanRow> rows) {
+    switch (_opportunitySortMode) {
+      case _OpportunitySortMode.opportunityDescending:
+        rows.sort((a, b) => b.opportunity.score.compareTo(a.opportunity.score));
+        break;
+
+      case _OpportunitySortMode.investMindDescending:
+        rows.sort(
+          (a, b) =>
+              b.analysis.investMindScore.compareTo(a.analysis.investMindScore),
+        );
+        break;
+
+      case _OpportunitySortMode.marketContextDescending:
+        rows.sort(
+          (a, b) => b.opportunity.marketContextScore.compareTo(
+            a.opportunity.marketContextScore,
+          ),
+        );
+        break;
+
+      case _OpportunitySortMode.confidenceDescending:
+        rows.sort(
+          (a, b) =>
+              b.analysis.confidenceScore.compareTo(a.analysis.confidenceScore),
+        );
+        break;
+    }
   }
 
   @override
@@ -205,6 +274,7 @@ class _MarketScreenState extends State<MarketScreen> {
       _investMindRows = [];
       _investMindScanError = null;
       _investMindFilter = _InvestMindFilter.all;
+      _opportunityFilter = _OpportunityFilter.all;
       _marketSignalFilter = _MarketSignalFilter.all;
       _loadQuotes();
     });
@@ -336,7 +406,16 @@ class _MarketScreenState extends State<MarketScreen> {
       _investMindScanError = null;
       _investMindRows = [];
       _investMindFilter = _InvestMindFilter.all;
+      _opportunityFilter = _OpportunityFilter.all;
     });
+
+    final marketRows =
+        await (_scannerFuture ??
+            Future<List<_MarketQuoteRow>>.value(const <_MarketQuoteRow>[]));
+
+    final marketSignalsBySymbol = <String, List<MarketSignal>>{
+      for (final row in marketRows) row.company.symbol: row.signals,
+    };
 
     final List<_InvestMindScanRow> result = [];
     final List<String> failedSymbols = [];
@@ -344,12 +423,20 @@ class _MarketScreenState extends State<MarketScreen> {
     for (final company in companies) {
       try {
         final analysis = await _comparisonService.loadCompany(company.symbol);
+        final marketSignals =
+            marketSignalsBySymbol[company.symbol] ?? const <MarketSignal>[];
+
+        final opportunity = _opportunityScoreService.calculate(
+          company: analysis,
+          marketSignals: marketSignals,
+        );
 
         result.add(
           _InvestMindScanRow(
             company: company,
             analysis: analysis,
             signals: _buildSignals(analysis),
+            opportunity: opportunity,
           ),
         );
 
@@ -363,10 +450,7 @@ class _MarketScreenState extends State<MarketScreen> {
       }
     }
 
-    result.sort(
-      (a, b) =>
-          b.analysis.investMindScore.compareTo(a.analysis.investMindScore),
-    );
+    result.sort((a, b) => b.opportunity.score.compareTo(a.opportunity.score));
 
     if (!mounted) {
       return;
@@ -682,6 +766,7 @@ class _MarketScreenState extends State<MarketScreen> {
                             _investMindRows = [];
                             _investMindScanError = null;
                             _investMindFilter = _InvestMindFilter.all;
+                            _opportunityFilter = _OpportunityFilter.all;
                             _loadQuotes();
                           });
                         },
@@ -1252,7 +1337,13 @@ class _MarketScreenState extends State<MarketScreen> {
             _buildInvestMindSummary(),
             const SizedBox(height: 18),
             _buildInvestMindFilters(),
+
+            const SizedBox(height: 14),
+
+            _buildOpportunityControls(),
+
             const SizedBox(height: 18),
+
             if (filteredRows.isEmpty)
               _buildNoFilteredResults()
             else
@@ -1266,10 +1357,7 @@ class _MarketScreenState extends State<MarketScreen> {
   Widget _buildInvestMindSummary() {
     final rows = List<_InvestMindScanRow>.from(_investMindRows);
 
-    rows.sort(
-      (a, b) =>
-          b.analysis.investMindScore.compareTo(a.analysis.investMindScore),
-    );
+    rows.sort((a, b) => b.opportunity.score.compareTo(a.opportunity.score));
 
     final leader = rows.first;
 
@@ -1293,9 +1381,9 @@ class _MarketScreenState extends State<MarketScreen> {
 
         final cards = [
           _buildInvestMindSummaryCard(
-            title: 'Лучший InvestMind Score',
+            title: 'Лучший Opportunity Score',
             symbol: leader.company.symbol,
-            value: '${leader.analysis.investMindScore}/100',
+            value: '${leader.opportunity.score}/100',
           ),
           _buildInvestMindSummaryCard(
             title: 'Лучший фундаментал в группе',
@@ -1423,6 +1511,110 @@ class _MarketScreenState extends State<MarketScreen> {
     }
   }
 
+  Widget _buildOpportunityControls() {
+    final filters = [
+      _OpportunityFilter.all,
+      _OpportunityFilter.highInterest,
+      _OpportunityFilter.watch,
+      _OpportunityFilter.neutral,
+      _OpportunityFilter.weakInterest,
+      _OpportunityFilter.lowInterest,
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Opportunity',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            DropdownButton<_OpportunitySortMode>(
+              value: _opportunitySortMode,
+              underline: const SizedBox.shrink(),
+              items: const [
+                DropdownMenuItem(
+                  value: _OpportunitySortMode.opportunityDescending,
+                  child: Text('Opportunity: выше'),
+                ),
+                DropdownMenuItem(
+                  value: _OpportunitySortMode.investMindDescending,
+                  child: Text('InvestMind: выше'),
+                ),
+                DropdownMenuItem(
+                  value: _OpportunitySortMode.marketContextDescending,
+                  child: Text('Market Context: выше'),
+                ),
+                DropdownMenuItem(
+                  value: _OpportunitySortMode.confidenceDescending,
+                  child: Text('Confidence: выше'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+
+                setState(() {
+                  _opportunitySortMode = value;
+                });
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: filters.map((filter) {
+              final selected = _opportunityFilter == filter;
+
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(
+                    '${_opportunityFilterLabel(filter)} '
+                    '(${_opportunityFilterCount(filter)})',
+                  ),
+                  selected: selected,
+                  onSelected: (_) {
+                    setState(() {
+                      _opportunityFilter = filter;
+                    });
+                  },
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _opportunityFilterLabel(_OpportunityFilter filter) {
+    switch (filter) {
+      case _OpportunityFilter.all:
+        return 'Все';
+      case _OpportunityFilter.highInterest:
+        return 'Высокий интерес';
+      case _OpportunityFilter.watch:
+        return 'Наблюдать';
+      case _OpportunityFilter.neutral:
+        return 'Нейтрально';
+      case _OpportunityFilter.weakInterest:
+        return 'Слабый интерес';
+      case _OpportunityFilter.lowInterest:
+        return 'Низкий интерес';
+    }
+  }
+
   Widget _buildNoFilteredResults() {
     return Container(
       width: double.infinity,
@@ -1436,7 +1628,7 @@ class _MarketScreenState extends State<MarketScreen> {
           Icon(Icons.filter_alt_off_outlined, color: Colors.white38, size: 34),
           SizedBox(height: 10),
           Text(
-            'Компаний с таким сигналом не найдено.',
+            'Компаний по выбранным фильтрам не найдено.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.white60),
           ),
@@ -1524,12 +1716,25 @@ class _MarketScreenState extends State<MarketScreen> {
                   color: const Color(0xFF20D3C2).withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text(
-                  '${analysis.investMindScore}/100',
-                  style: const TextStyle(
-                    color: Color(0xFF20D3C2),
-                    fontWeight: FontWeight.bold,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Opportunity ${row.opportunity.score}/100',
+                      style: const TextStyle(
+                        color: Color(0xFF20D3C2),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      row.opportunity.label,
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1539,6 +1744,7 @@ class _MarketScreenState extends State<MarketScreen> {
             spacing: 8,
             runSpacing: 8,
             children: [
+              _buildScoreBadge('InvestMind', analysis.investMindScore),
               _buildScoreBadge('Tech', analysis.technicalScore),
               _buildScoreBadge('Fund', analysis.fundamentalScore),
               _buildScoreBadge('Growth', analysis.growthScore),
@@ -1555,6 +1761,8 @@ class _MarketScreenState extends State<MarketScreen> {
               children: row.signals.map(_buildSignalChip).toList(),
             ),
           ],
+          const SizedBox(height: 14),
+          _buildOpportunityBreakdown(row),
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerRight,
@@ -1566,6 +1774,135 @@ class _MarketScreenState extends State<MarketScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildOpportunityBreakdown(_InvestMindScanRow row) {
+    final opportunity = row.opportunity;
+    final analysis = row.analysis;
+
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.025),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        ),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+          title: Text(
+            'Почему ${opportunity.score}/100?',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          subtitle: Text(
+            'Market Context ${opportunity.marketContextScore}/100',
+            style: const TextStyle(color: Colors.white54, fontSize: 11),
+          ),
+          children: [
+            _buildOpportunityLine(
+              label: 'InvestMind',
+              sourceValue: analysis.investMindScore.toDouble(),
+              weightPercent: 70,
+              contribution: opportunity.investMindContribution,
+            ),
+            const SizedBox(height: 8),
+            _buildOpportunityLine(
+              label: 'Market Context',
+              sourceValue: opportunity.marketContextScore.toDouble(),
+              weightPercent: 20,
+              contribution: opportunity.marketContextContribution,
+            ),
+            const SizedBox(height: 8),
+            _buildOpportunityLine(
+              label: 'Confidence',
+              sourceValue: analysis.confidenceScore.toDouble(),
+              weightPercent: 10,
+              contribution: opportunity.confidenceContribution,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Итого до округления',
+                    style: TextStyle(color: Colors.white60, fontSize: 12),
+                  ),
+                ),
+                Text(
+                  opportunity.rawScore.toStringAsFixed(1),
+                  style: const TextStyle(
+                    color: Color(0xFF20D3C2),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Что повлияло на Market Context',
+                style: TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+            ),
+            const SizedBox(height: 7),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: opportunity.reasons.map((reason) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF20D3C2).withValues(alpha: 0.07),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      reason,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 10,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOpportunityLine({
+    required String label,
+    required double sourceValue,
+    required int weightPercent,
+    required double contribution,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            '$label ${sourceValue.toStringAsFixed(0)} × $weightPercent%',
+            style: const TextStyle(color: Colors.white60, fontSize: 12),
+          ),
+        ),
+        Text(
+          '+${contribution.toStringAsFixed(1)}',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 
@@ -1900,6 +2237,22 @@ enum _InvestMindFilter {
   divergences,
 }
 
+enum _OpportunityFilter {
+  all,
+  highInterest,
+  watch,
+  neutral,
+  weakInterest,
+  lowInterest,
+}
+
+enum _OpportunitySortMode {
+  opportunityDescending,
+  investMindDescending,
+  marketContextDescending,
+  confidenceDescending,
+}
+
 class _MarketQuoteRow {
   final MarketCompany company;
   final StockQuote quote;
@@ -1928,10 +2281,12 @@ class _InvestMindScanRow {
   final MarketCompany company;
   final CompanyComparison analysis;
   final List<_InvestMindSignal> signals;
+  final OpportunityScoreResult opportunity;
 
   const _InvestMindScanRow({
     required this.company,
     required this.analysis,
     required this.signals,
+    required this.opportunity,
   });
 }

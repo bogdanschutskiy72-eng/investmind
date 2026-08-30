@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../company/company_screen.dart';
 import '../../services/transaction_service.dart';
 
 class TransactionsScreen extends StatelessWidget {
@@ -30,9 +31,7 @@ class TransactionsScreen extends StatelessWidget {
     return '$day.$month.$year • $hour:$minute';
   }
 
-  double _totalRealizedProfit(
-    List<PortfolioTransaction> transactions,
-  ) {
+  double _totalRealizedProfit(List<PortfolioTransaction> transactions) {
     double total = 0;
 
     for (final transaction in transactions) {
@@ -44,15 +43,90 @@ class TransactionsScreen extends StatelessWidget {
     return total;
   }
 
+  Widget _scoreBadge(String text, {bool highlight = false}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: highlight
+            ? const Color(0xFF20D3C2).withValues(alpha: 0.10)
+            : Colors.white.withValues(alpha: 0.045),
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: highlight ? const Color(0xFF20D3C2) : Colors.white70,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnalyticsSnapshot(PortfolioTransaction transaction) {
+    final snapshot = transaction.analyticsSnapshot;
+
+    if (snapshot == null) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 12),
+        child: Text(
+          'Для этой старой операции '
+          'аналитический snapshot не сохранён.',
+          style: TextStyle(color: Colors.white38, fontSize: 11),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'InvestMind на момент операции',
+            style: TextStyle(color: Colors.white54, fontSize: 11),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _scoreBadge(
+                'InvestMind '
+                '${snapshot.investMindScore}',
+              ),
+              _scoreBadge(
+                'Opportunity '
+                '${snapshot.opportunityScore}',
+                highlight: true,
+              ),
+              _scoreBadge(
+                'Context '
+                '${snapshot.marketContextScore}',
+              ),
+              _scoreBadge(
+                'Conf '
+                '${snapshot.confidenceScore}',
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Text(
+            'Зафиксировано: '
+            '${_formatDate(snapshot.capturedAt)}',
+            style: const TextStyle(color: Colors.white38, fontSize: 10),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('История операций'),
-      ),
+      appBar: AppBar(title: const Text('История операций')),
       body: ValueListenableBuilder<List<PortfolioTransaction>>(
-        valueListenable:
-            TransactionService.instance.transactions,
+        valueListenable: TransactionService.instance.transactions,
         builder: (context, transactions, _) {
           if (transactions.isEmpty) {
             return const Center(
@@ -76,12 +150,10 @@ class TransactionsScreen extends StatelessWidget {
                     ),
                     SizedBox(height: 10),
                     Text(
-                      'Новые покупки и продажи будут появляться здесь.',
+                      'Новые покупки и продажи '
+                      'будут появляться здесь.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white60,
-                        fontSize: 16,
-                      ),
+                      style: TextStyle(color: Colors.white60, fontSize: 16),
                     ),
                   ],
                 ),
@@ -89,8 +161,7 @@ class TransactionsScreen extends StatelessWidget {
             );
           }
 
-          final totalProfit =
-              _totalRealizedProfit(transactions);
+          final totalProfit = _totalRealizedProfit(transactions);
 
           final totalProfitPositive = totalProfit >= 0;
 
@@ -109,10 +180,7 @@ class TransactionsScreen extends StatelessWidget {
                   children: [
                     const Text(
                       'Зафиксированный результат',
-                      style: TextStyle(
-                        color: Colors.white60,
-                        fontSize: 15,
-                      ),
+                      style: TextStyle(color: Colors.white60, fontSize: 15),
                     ),
                     const SizedBox(height: 10),
                     Text(
@@ -124,14 +192,13 @@ class TransactionsScreen extends StatelessWidget {
                         color: totalProfitPositive
                             ? Colors.greenAccent
                             : Colors.redAccent,
-                      ),),
+                      ),
+                    ),
                     const SizedBox(height: 6),
                     const Text(
-                      'Прибыль и убыток по завершённым продажам',
-                      style: TextStyle(
-                        color: Colors.white54,
-                        fontSize: 13,
-                      ),
+                      'Прибыль и убыток по '
+                      'завершённым продажам',
+                      style: TextStyle(color: Colors.white54, fontSize: 13),
                     ),
                   ],
                 ),
@@ -139,41 +206,43 @@ class TransactionsScreen extends StatelessWidget {
               const SizedBox(height: 24),
               const Text(
                 'Все операции',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
-              ...transactions.map(
-                (transaction) {
-                  final isBuy =
-                      transaction.type == TransactionType.buy;
+              ...transactions.map((transaction) {
+                final isBuy = transaction.type == TransactionType.buy;
 
-                  final operationTitle =
-                      isBuy ? 'Покупка' : 'Продажа';
+                final operationTitle = isBuy ? 'Покупка' : 'Продажа';
 
-                  final operationColor = isBuy
-                      ? const Color(0xFF20D3C2)
-                      : Colors.orangeAccent;
+                final operationColor = isBuy
+                    ? const Color(0xFF20D3C2)
+                    : Colors.orangeAccent;
 
-                  final operationIcon = isBuy
-                      ? Icons.add_shopping_cart
-                      : Icons.sell_outlined;
+                final operationIcon = isBuy
+                    ? Icons.add_shopping_cart
+                    : Icons.sell_outlined;
 
-                  final realizedProfit =
-                      transaction.realizedProfit;
+                final realizedProfit = transaction.realizedProfit;
 
-                  return Padding(
-                    padding:
-                        const EdgeInsets.only(bottom: 12),
-                    child: Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
-                        borderRadius:
-                            BorderRadius.circular(18),
-                      ),
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                CompanyScreen(company: transaction.symbol),
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(14),
                       child: Column(
                         children: [
                           Row(
@@ -182,12 +251,8 @@ class TransactionsScreen extends StatelessWidget {
                                 width: 48,
                                 height: 48,
                                 decoration: BoxDecoration(
-                                  color:
-                                      operationColor.withValues(
-                                    alpha: 0.12,
-                                  ),
-                                  borderRadius:
-                                      BorderRadius.circular(14),
+                                  color: operationColor.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(14),
                                 ),
                                 child: Icon(
                                   operationIcon,
@@ -197,16 +262,14 @@ class TransactionsScreen extends StatelessWidget {
                               const SizedBox(width: 16),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       '${transaction.company} • '
                                       '${transaction.symbol}',
                                       style: const TextStyle(
                                         fontSize: 17,
-                                        fontWeight:
-                                            FontWeight.bold,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                     const SizedBox(height: 6),
@@ -216,14 +279,12 @@ class TransactionsScreen extends StatelessWidget {
                                       'по ${_formatMoney(transaction.price)}',
                                       style: TextStyle(
                                         color: operationColor,
-                                        fontWeight:
-                                            FontWeight.w600,
+                                        fontWeight: FontWeight.w600,
                                       ),
-                                    ),const SizedBox(height: 6),
+                                    ),
+                                    const SizedBox(height: 6),
                                     Text(
-                                      _formatDate(
-                                        transaction.createdAt,
-                                      ),
+                                      _formatDate(transaction.createdAt),
                                       style: const TextStyle(
                                         color: Colors.white54,
                                         fontSize: 13,
@@ -234,9 +295,7 @@ class TransactionsScreen extends StatelessWidget {
                               ),
                               const SizedBox(width: 12),
                               Text(
-                                _formatMoney(
-                                  transaction.totalAmount,
-                                ),
+                                _formatMoney(transaction.totalAmount),
                                 style: const TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -244,8 +303,8 @@ class TransactionsScreen extends StatelessWidget {
                               ),
                             ],
                           ),
-                          if (!isBuy &&
-                              realizedProfit != null) ...[
+                          _buildAnalyticsSnapshot(transaction),
+                          if (!isBuy && realizedProfit != null) ...[
                             const SizedBox(height: 14),
                             const Divider(height: 1),
                             const SizedBox(height: 14),
@@ -253,9 +312,7 @@ class TransactionsScreen extends StatelessWidget {
                               children: [
                                 const Text(
                                   'Результат продажи',
-                                  style: TextStyle(
-                                    color: Colors.white60,
-                                  ),
+                                  style: TextStyle(color: Colors.white60),
                                 ),
                                 const Spacer(),
                                 Text(
@@ -275,9 +332,9 @@ class TransactionsScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              }),
             ],
           );
         },

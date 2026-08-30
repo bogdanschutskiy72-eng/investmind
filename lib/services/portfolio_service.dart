@@ -3,6 +3,11 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../features/comparison/comparison_service.dart';
+import '../features/market/market_signal_service.dart';
+import '../features/market/opportunity_score_service.dart';
+import 'historical_price_service.dart';
+import 'stock_service.dart';
 import 'transaction_service.dart';
 
 class PortfolioPosition {
@@ -29,15 +34,12 @@ class PortfolioPosition {
     };
   }
 
-  factory PortfolioPosition.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory PortfolioPosition.fromJson(Map<String, dynamic> json) {
     return PortfolioPosition(
       company: json['company']?.toString() ?? '',
       symbol: json['symbol']?.toString() ?? '',
       quantity: (json['quantity'] as num?)?.toDouble() ?? 0,
-      averagePrice:
-          (json['averagePrice'] as num?)?.toDouble() ?? 0,
+      averagePrice: (json['averagePrice'] as num?)?.toDouble() ?? 0,
     );
   }
 }
@@ -45,23 +47,27 @@ class PortfolioPosition {
 class PortfolioService {
   PortfolioService._();
 
-  static final PortfolioService instance =
-      PortfolioService._();
+  static final PortfolioService instance = PortfolioService._();
 
   static const String _storageKey = 'portfolio_positions';
 
   final ValueNotifier<List<PortfolioPosition>> positions =
-      ValueNotifier<List<PortfolioPosition>>(
-    <PortfolioPosition>[],
-  );
+      ValueNotifier<List<PortfolioPosition>>(<PortfolioPosition>[]);
+
+  final StockService _stockService = StockService();
+  final ComparisonService _comparisonService = ComparisonService();
+  final HistoricalPriceService _historicalPriceService =
+      HistoricalPriceService();
+  final MarketSignalService _marketSignalService = const MarketSignalService();
+  final OpportunityScoreService _opportunityScoreService =
+      const OpportunityScoreService();
 
   late SharedPreferences _preferences;
 
   Future<void> initialize() async {
     _preferences = await SharedPreferences.getInstance();
 
-    final savedData =
-        _preferences.getStringList(_storageKey) ?? <String>[];
+    final savedData = _preferences.getStringList(_storageKey) ?? <String>[];
 
     final loadedPositions = <PortfolioPosition>[];
 
@@ -70,8 +76,7 @@ class PortfolioService {
         final decoded = jsonDecode(item);
 
         if (decoded is Map<String, dynamic>) {
-          final position =
-              PortfolioPosition.fromJson(decoded);
+          final position = PortfolioPosition.fromJson(decoded);
 
           if (position.symbol.isNotEmpty &&
               position.quantity > 0 &&
@@ -85,11 +90,51 @@ class PortfolioService {
     }
 
     loadedPositions.sort(
-      (first, second) =>
-          first.symbol.compareTo(second.symbol),
+      (first, second) => first.symbol.compareTo(second.symbol),
     );
 
     positions.value = loadedPositions;
+  }
+
+  Future<TransactionAnalyticsSnapshot?> _captureAnalyticsSnapshot(
+    String symbol,
+  ) async {
+    try {
+      final quoteFuture = _stockService.fetchQuote(symbol);
+
+      final comparisonFuture = _comparisonService.loadCompany(symbol);
+
+      final historicalFuture = _historicalPriceService.fetchAnalysis(
+        symbol,
+        days: 90,
+      );
+
+      final quote = await quoteFuture;
+      final comparison = await comparisonFuture;
+      final historical = await historicalFuture;
+
+      final marketSignals = _marketSignalService.buildSignals(
+        quote: quote,
+        historical: historical,
+      );
+
+      final opportunity = _opportunityScoreService.calculate(
+        company: comparison,
+        marketSignals: marketSignals,
+      );
+
+      return TransactionAnalyticsSnapshot(
+        investMindScore: comparison.investMindScore,
+        opportunityScore: opportunity.score,
+        marketContextScore: opportunity.marketContextScore,
+        confidenceScore: comparison.confidenceScore,
+        capturedAt: DateTime.now(),
+      );
+    } catch (_) {
+      // Операция не должна сорваться только потому,
+      // что аналитика временно недоступна.
+      return null;
+    }
   }
 
   Future<void> addPurchase({
@@ -98,39 +143,30 @@ class PortfolioService {
     required double quantity,
     required double purchasePrice,
   }) async {
-    final normalizedSymbol =
-        symbol.trim().toUpperCase();
+    final normalizedSymbol = symbol.trim().toUpperCase();
 
     final normalizedCompany = company.trim();
 
-    if (normalizedSymbol.isEmpty ||
-        quantity <= 0 ||
-        purchasePrice <= 0) {
-      throw ArgumentError(
-        'Проверь тикер, количество и цену покупки.',
-      );
+    if (normalizedSymbol.isEmpty || quantity <= 0 || purchasePrice <= 0) {
+      throw ArgumentError('Проверь тикер, количество и цену покупки.');
     }
 
-    final updated =
-        List<PortfolioPosition>.from(positions.value);
+    final analyticsSnapshot = await _captureAnalyticsSnapshot(normalizedSymbol);
+
+    final updated = List<PortfolioPosition>.from(positions.value);
 
     final existingIndex = updated.indexWhere(
-      (position) =>
-          position.symbol == normalizedSymbol,
+      (position) => position.symbol == normalizedSymbol,
     );
 
     if (existingIndex >= 0) {
       final existing = updated[existingIndex];
 
-      final totalQuantity =
-          existing.quantity + quantity;
+      final totalQuantity = existing.quantity + quantity;
 
-      final totalInvested =
-          existing.investedAmount +
-          quantity * purchasePrice;
+      final totalInvested = existing.investedAmount + quantity * purchasePrice;
 
-      final newAveragePrice =
-          totalInvested / totalQuantity;
+      final newAveragePrice = totalInvested / totalQuantity;
 
       updated[existingIndex] = PortfolioPosition(
         company: normalizedCompany.isEmpty
@@ -153,22 +189,19 @@ class PortfolioService {
       );
     }
 
-    updated.sort(
-      (first, second) =>
-          first.symbol.compareTo(second.symbol),
-    );
+    updated.sort((first, second) => first.symbol.compareTo(second.symbol));
 
     positions.value = updated;
 
     await _save();
 
     await TransactionService.instance.addTransaction(
-      company: normalizedCompany.isEmpty
-          ? normalizedSymbol: normalizedCompany,
+      company: normalizedCompany.isEmpty ? normalizedSymbol : normalizedCompany,
       symbol: normalizedSymbol,
       type: TransactionType.buy,
       quantity: quantity,
       price: purchasePrice,
+      analyticsSnapshot: analyticsSnapshot,
     );
   }
 
@@ -177,44 +210,36 @@ class PortfolioService {
     required double quantity,
     required double salePrice,
   }) async {
-    final normalizedSymbol =
-        symbol.trim().toUpperCase();
+    final normalizedSymbol = symbol.trim().toUpperCase();
 
-    if (normalizedSymbol.isEmpty ||
-        quantity <= 0 ||
-        salePrice <= 0) {
-      throw ArgumentError(
-        'Проверь тикер, количество и цену продажи.',
-      );
+    if (normalizedSymbol.isEmpty || quantity <= 0 || salePrice <= 0) {
+      throw ArgumentError('Проверь тикер, количество и цену продажи.');
     }
 
-    final updated =
-        List<PortfolioPosition>.from(positions.value);
+    final updated = List<PortfolioPosition>.from(positions.value);
 
     final existingIndex = updated.indexWhere(
-      (position) =>
-          position.symbol == normalizedSymbol,
+      (position) => position.symbol == normalizedSymbol,
     );
 
     if (existingIndex < 0) {
-      throw StateError(
-        'Позиция $normalizedSymbol не найдена.',
-      );
+      throw StateError('Позиция $normalizedSymbol не найдена.');
     }
 
     final existing = updated[existingIndex];
 
     if (quantity > existing.quantity) {
       throw StateError(
-        'Нельзя продать больше акций, чем есть в портфеле.',
+        'Нельзя продать больше акций, '
+        'чем есть в портфеле.',
       );
     }
 
-    final realizedProfit =
-        (salePrice - existing.averagePrice) * quantity;
+    final analyticsSnapshot = await _captureAnalyticsSnapshot(normalizedSymbol);
 
-    final remainingQuantity =
-        existing.quantity - quantity;
+    final realizedProfit = (salePrice - existing.averagePrice) * quantity;
+
+    final remainingQuantity = existing.quantity - quantity;
 
     if (remainingQuantity <= 0.000001) {
       updated.removeAt(existingIndex);
@@ -238,6 +263,7 @@ class PortfolioService {
       quantity: quantity,
       price: salePrice,
       realizedProfit: realizedProfit,
+      analyticsSnapshot: analyticsSnapshot,
     );
 
     return realizedProfit;
@@ -249,31 +275,22 @@ class PortfolioService {
     required double quantity,
     required double averagePrice,
   }) async {
-    final normalizedSymbol =
-        symbol.trim().toUpperCase();
+    final normalizedSymbol = symbol.trim().toUpperCase();
 
     final normalizedCompany = company.trim();
 
-    if (normalizedSymbol.isEmpty ||
-        quantity <= 0 ||
-        averagePrice <= 0) {
-      throw ArgumentError(
-        'Проверь тикер, количество и среднюю цену.',
-      );
+    if (normalizedSymbol.isEmpty || quantity <= 0 || averagePrice <= 0) {
+      throw ArgumentError('Проверь тикер, количество и среднюю цену.');
     }
 
-    final updated =
-        List<PortfolioPosition>.from(positions.value);
+    final updated = List<PortfolioPosition>.from(positions.value);
 
     final existingIndex = updated.indexWhere(
-      (position) =>
-          position.symbol == normalizedSymbol,
+      (position) => position.symbol == normalizedSymbol,
     );
 
     final newPosition = PortfolioPosition(
-      company: normalizedCompany.isEmpty
-          ? normalizedSymbol
-          : normalizedCompany,
+      company: normalizedCompany.isEmpty ? normalizedSymbol : normalizedCompany,
       symbol: normalizedSymbol,
       quantity: quantity,
       averagePrice: averagePrice,
@@ -285,10 +302,7 @@ class PortfolioService {
       updated.add(newPosition);
     }
 
-    updated.sort(
-      (first, second) =>
-          first.symbol.compareTo(second.symbol),
-    );
+    updated.sort((first, second) => first.symbol.compareTo(second.symbol));
 
     positions.value = updated;
 
@@ -296,14 +310,10 @@ class PortfolioService {
   }
 
   Future<void> removePosition(String symbol) async {
-    final normalizedSymbol =
-        symbol.trim().toUpperCase();
+    final normalizedSymbol = symbol.trim().toUpperCase();
 
     final updated = positions.value
-        .where(
-          (position) =>
-              position.symbol != normalizedSymbol,
-        )
+        .where((position) => position.symbol != normalizedSymbol)
         .toList();
 
     positions.value = updated;
@@ -312,8 +322,7 @@ class PortfolioService {
   }
 
   PortfolioPosition? findPosition(String symbol) {
-    final normalizedSymbol =
-        symbol.trim().toUpperCase();
+    final normalizedSymbol = symbol.trim().toUpperCase();
 
     for (final position in positions.value) {
       if (position.symbol == normalizedSymbol) {
@@ -326,15 +335,9 @@ class PortfolioService {
 
   Future<void> _save() async {
     final encodedPositions = positions.value
-        .map(
-          (position) =>
-              jsonEncode(position.toJson()),
-        )
+        .map((position) => jsonEncode(position.toJson()))
         .toList();
 
-    await _preferences.setStringList(
-      _storageKey,
-      encodedPositions,
-    );
+    await _preferences.setStringList(_storageKey, encodedPositions);
   }
 }
