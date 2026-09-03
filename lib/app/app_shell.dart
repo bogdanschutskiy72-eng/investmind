@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../features/market/market_background_refresh_service.dart';
 import '../features/analysis/analysis_screen.dart';
 import '../features/comparison/comparison_screen.dart';
 import '../features/favorites/favorites_screen.dart';
@@ -19,6 +20,12 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
+  @override
+  void initState() {
+    super.initState();
+
+    MarketBackgroundRefreshService.instance.start(companyLimit: 12);
+  }
 
   void _selectPage(int index) {
     setState(() {

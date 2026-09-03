@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import 'market_data_cache.dart';
 import '../../company/company_screen.dart';
 import '../../services/historical_price_service.dart';
 import '../../services/stock_service.dart';
@@ -23,6 +24,7 @@ class MarketScreen extends StatefulWidget {
 
 class _MarketScreenState extends State<MarketScreen> {
   final StockService _stockService = StockService();
+  final MarketDataCache _marketDataCache = MarketDataCache.instance;
   final ComparisonService _comparisonService = ComparisonService();
   final HistoricalPriceService _historicalPriceService =
       HistoricalPriceService();
@@ -244,18 +246,28 @@ class _MarketScreenState extends State<MarketScreen> {
 
         List<MarketSignal> signals = const [];
 
-        try {
-          final historical = await _historicalPriceService.fetchAnalysis(
-            company.symbol,
-            days: 90,
-          );
+        final cachedHistorical = _historicalPriceService.getCachedAnalysis(
+          company.symbol,
+          days: 90,
+          allowExpired: true,
+        );
 
+        if (cachedHistorical != null) {
           signals = _marketSignalService.buildSignals(
             quote: quote,
-            historical: historical,
+            historical: cachedHistorical,
           );
-        } catch (_) {
-          // Исторические данные не должны ломать обычные котировки.
+
+          _marketDataCache.saveMarketData(
+            company: company,
+            quote: quote,
+            historical: cachedHistorical,
+            marketSignals: signals,
+          );
+        } else {
+          _marketDataCache.saveQuote(company: company, quote: quote);
+
+          unawaited(_loadHistoricalDataInBackground(company, quote));
         }
 
         rows.add(
@@ -267,6 +279,32 @@ class _MarketScreenState extends State<MarketScreen> {
     }
 
     return rows;
+  }
+
+  Future<void> _loadHistoricalDataInBackground(
+    MarketCompany company,
+    StockQuote quote,
+  ) async {
+    try {
+      final historical = await _historicalPriceService.fetchAnalysis(
+        company.symbol,
+        days: 90,
+      );
+
+      final signals = _marketSignalService.buildSignals(
+        quote: quote,
+        historical: historical,
+      );
+
+      _marketDataCache.saveMarketData(
+        company: company,
+        quote: quote,
+        historical: historical,
+        marketSignals: signals,
+      );
+    } catch (_) {
+      // Фоновая история не должна блокировать Market Screen.
+    }
   }
 
   void _refreshAll() {
@@ -429,6 +467,12 @@ class _MarketScreenState extends State<MarketScreen> {
         final opportunity = _opportunityScoreService.calculate(
           company: analysis,
           marketSignals: marketSignals,
+        );
+
+        _marketDataCache.saveInvestMindData(
+          company: company,
+          comparison: analysis,
+          opportunity: opportunity,
         );
 
         result.add(

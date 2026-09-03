@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'dart:async';
+import '../market/market_data_cache.dart';
 import '../../services/portfolio_analytics_service.dart';
 import '../../services/portfolio_service.dart';
 import '../portfolio/portfolio_health_service.dart';
@@ -24,6 +26,8 @@ class _PulseScreenState extends State<PulseScreen> {
 
   final MarketPulseService _marketPulseService = MarketPulseService();
 
+  final MarketDataCache _marketDataCache = MarketDataCache.instance;
+
   bool _isLoading = true;
   String? _error;
 
@@ -37,6 +41,8 @@ class _PulseScreenState extends State<PulseScreen> {
 
     PortfolioService.instance.positions.addListener(_handlePortfolioChanged);
 
+    _marketDataCache.addListener(_handleMarketDataChanged);
+
     _loadPulse();
   }
 
@@ -44,11 +50,17 @@ class _PulseScreenState extends State<PulseScreen> {
   void dispose() {
     PortfolioService.instance.positions.removeListener(_handlePortfolioChanged);
 
+    _marketDataCache.removeListener(_handleMarketDataChanged);
+
     super.dispose();
   }
 
   void _handlePortfolioChanged() {
     _loadPulse();
+  }
+
+  void _handleMarketDataChanged() {
+    _loadMarketPulse();
   }
 
   Future<void> _loadPulse() async {
@@ -486,13 +498,31 @@ class _PulseScreenState extends State<PulseScreen> {
 
                 const SizedBox(height: 8),
 
-                Text(
-                  _priorityLabel(event.priority),
-                  style: TextStyle(
-                    color: accent,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      _priorityLabel(event.priority),
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      '•',
+                      style: TextStyle(color: Color(0xFF64748B), fontSize: 9),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _freshnessText(event.createdAt),
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -577,6 +607,35 @@ class _PulseScreenState extends State<PulseScreen> {
         ),
       ),
     );
+  }
+
+  String _freshnessText(DateTime createdAt) {
+    final now = DateTime.now();
+
+    final difference = now.difference(createdAt);
+
+    if (difference.isNegative) {
+      return 'только что';
+    }
+
+    if (difference.inSeconds < 60) {
+      return 'только что';
+    }
+
+    if (difference.inMinutes < 60) {
+      return 'обновлено ${difference.inMinutes} мин назад';
+    }
+
+    if (difference.inHours < 24) {
+      return 'обновлено ${difference.inHours} ч назад';
+    }
+
+    final day = createdAt.day.toString().padLeft(2, '0');
+    final month = createdAt.month.toString().padLeft(2, '0');
+    final hour = createdAt.hour.toString().padLeft(2, '0');
+    final minute = createdAt.minute.toString().padLeft(2, '0');
+
+    return 'обновлено $day.$month в $hour:$minute';
   }
 
   int _compareEvents(PulseEvent a, PulseEvent b) {
