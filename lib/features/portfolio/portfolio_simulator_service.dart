@@ -7,6 +7,24 @@ enum PortfolioSimulationType {
   rebalanceSelectedPosition,
 }
 
+class PortfolioSimulationUnavailableException implements Exception {
+  final List<String> failedSymbols;
+
+  const PortfolioSimulationUnavailableException({required this.failedSymbols});
+
+  @override
+  String toString() {
+    if (failedSymbols.isEmpty) {
+      return 'Симулятор временно недоступен: '
+          'аналитика портфеля неполная.';
+    }
+
+    return 'Симулятор временно недоступен: '
+        'не удалось получить данные по '
+        '${failedSymbols.join(', ')}.';
+  }
+}
+
 class PortfolioSimulationResult {
   final PortfolioSimulationType type;
   final String title;
@@ -156,10 +174,22 @@ class PortfolioSimulatorService {
     this._healthService = const PortfolioHealthService(),
   });
 
+  void _ensureCompleteAnalytics(PortfolioAnalyticsResult analytics) {
+    if (!analytics.isPartial) {
+      return;
+    }
+
+    throw PortfolioSimulationUnavailableException(
+      failedSymbols: analytics.failedSymbols,
+    );
+  }
+
   List<PortfolioSimulationResult> buildDefaultScenarios({
     required PortfolioAnalyticsResult analytics,
     double targetWeightPercent = 50.0,
   }) {
+    _ensureCompleteAnalytics(analytics);
+
     if (analytics.positions.isEmpty) {
       return const [];
     }
@@ -180,6 +210,8 @@ class PortfolioSimulatorService {
     required String symbol,
     required double targetWeightPercent,
   }) {
+    _ensureCompleteAnalytics(analytics);
+
     if (analytics.positions.isEmpty ||
         analytics.currentValue <= 0 ||
         targetWeightPercent <= 0 ||
@@ -285,6 +317,7 @@ class PortfolioSimulatorService {
     );
 
     final beforeHealth = _healthService.calculate(analytics);
+
     final afterHealth = _healthService.calculate(simulatedAnalytics);
 
     return PortfolioSimulationResult(
@@ -372,6 +405,7 @@ class PortfolioSimulatorService {
     );
 
     final beforeHealth = _healthService.calculate(analytics);
+
     final afterHealth = _healthService.calculate(simulatedAnalytics);
 
     return PortfolioSimulationResult(
@@ -501,6 +535,8 @@ class PortfolioSimulatorService {
     double minTargetWeightPercent = 1.0,
     double stepPercent = 0.5,
   }) {
+    _ensureCompleteAnalytics(analytics);
+
     if (analytics.positions.isEmpty) {
       return const PortfolioScenarioRankingResult(
         items: [],
@@ -595,6 +631,8 @@ class PortfolioSimulatorService {
     double minTargetWeightPercent = 1.0,
     double stepPercent = 0.5,
   }) {
+    _ensureCompleteAnalytics(analytics);
+
     if (analytics.positions.isEmpty ||
         analytics.currentValue <= 0 ||
         stepPercent <= 0) {
@@ -818,6 +856,9 @@ class PortfolioSimulatorService {
       largestPositionWeightPercent: largestPosition?.weightPercent ?? 0.0,
       largestPositionSymbol: largestPosition?.position.symbol,
       warnings: original.warnings,
+      status: original.status,
+      requestedPositionCount: original.requestedPositionCount,
+      failedSymbols: original.failedSymbols,
     );
   }
 

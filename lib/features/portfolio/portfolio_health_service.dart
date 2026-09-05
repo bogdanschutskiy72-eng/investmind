@@ -12,6 +12,24 @@ enum PortfolioHealthLevel {
 
 enum PortfolioInsightType { strength, risk, improvement }
 
+class PortfolioHealthUnavailableException implements Exception {
+  final List<String> failedSymbols;
+
+  const PortfolioHealthUnavailableException({required this.failedSymbols});
+
+  @override
+  String toString() {
+    if (failedSymbols.isEmpty) {
+      return 'Portfolio Health временно недоступен: '
+          'аналитика портфеля неполная.';
+    }
+
+    return 'Portfolio Health временно недоступен: '
+        'не удалось получить данные по '
+        '${failedSymbols.join(', ')}.';
+  }
+}
+
 class PortfolioHealthInsight {
   final PortfolioInsightType type;
   final String title;
@@ -53,12 +71,16 @@ class PortfolioHealthResult {
     switch (level) {
       case PortfolioHealthLevel.excellent:
         return 'Отличное состояние';
+
       case PortfolioHealthLevel.strong:
         return 'Сильный портфель';
+
       case PortfolioHealthLevel.balanced:
         return 'Сбалансировано';
+
       case PortfolioHealthLevel.elevatedRisk:
         return 'Повышенный риск';
+
       case PortfolioHealthLevel.highRisk:
         return 'Высокий риск';
     }
@@ -69,6 +91,12 @@ class PortfolioHealthService {
   const PortfolioHealthService();
 
   PortfolioHealthResult calculate(PortfolioAnalyticsResult analytics) {
+    if (analytics.isPartial) {
+      throw PortfolioHealthUnavailableException(
+        failedSymbols: analytics.failedSymbols,
+      );
+    }
+
     if (analytics.positions.isEmpty) {
       return const PortfolioHealthResult(
         score: 0,
@@ -83,11 +111,15 @@ class PortfolioHealthService {
     }
 
     final qualityScore = analytics.investMindScore.clamp(0, 100);
+
     final opportunityScore = analytics.opportunityScore.clamp(0, 100);
+
     final diversificationScore = _calculateDiversificationScore(analytics);
+
     final concentrationScore = _calculateConcentrationScore(
       analytics.largestPositionWeightPercent,
     );
+
     final riskScore = _calculateRiskScore(analytics);
 
     final rawScore =
@@ -140,9 +172,6 @@ class PortfolioHealthService {
       return 0;
     }
 
-    // Нормализованная энтропия:
-    // 100 = позиции распределены максимально равномерно,
-    // 0 = почти весь вес сосредоточен в одной позиции.
     double entropy = 0.0;
 
     for (final weight in weights) {
@@ -155,12 +184,8 @@ class PortfolioHealthService {
         ? 0.0
         : (entropy / maxEntropy * 100.0).clamp(0.0, 100.0);
 
-    // Отдельно учитываем само количество позиций.
-    // Так 50/50 из двух компаний не получает 100/100,
-    // но оценивается заметно лучше, чем 98/2.
     final countScore = _positionCountScore(weights.length);
 
-    // Баланс весов важнее количества, но оба фактора влияют.
     final diversification = balanceScore * 0.70 + countScore * 0.30;
 
     return diversification.round().clamp(0, 100);
@@ -250,6 +275,7 @@ class PortfolioHealthService {
       }
 
       weightedRisk += item.comparison.riskScore * weight;
+
       totalWeight += weight;
     }
 
@@ -296,8 +322,8 @@ class PortfolioHealthService {
           type: PortfolioInsightType.strength,
           title: 'Сильное качество активов',
           description:
-              'Средневзвешенный InvestMind Score портфеля — '
-              '$qualityScore/100.',
+              'Средневзвешенный InvestMind Score '
+              'портфеля — $qualityScore/100.',
           impact: 2,
         ),
       );
@@ -376,7 +402,8 @@ class PortfolioHealthService {
           type: PortfolioInsightType.strength,
           title: 'Хорошая диверсификация',
           description:
-              'Распределение позиций выглядит достаточно сбалансированным: '
+              'Распределение позиций выглядит '
+              'достаточно сбалансированным: '
               '$diversificationScore/100.',
           impact: 1,
         ),
@@ -431,8 +458,8 @@ class PortfolioHealthService {
           type: PortfolioInsightType.strength,
           title: 'Сильная возможность в портфеле',
           description:
-              '${strongestPosition.position.symbol} имеет '
-              'Opportunity '
+              '${strongestPosition.position.symbol} '
+              'имеет Opportunity '
               '${strongestPosition.opportunity.score}/100.',
           impact: 1,
         ),
@@ -447,8 +474,8 @@ class PortfolioHealthService {
           type: PortfolioInsightType.improvement,
           title: 'Слабая позиция по Opportunity',
           description:
-              '${weakestPosition.position.symbol} имеет '
-              'Opportunity '
+              '${weakestPosition.position.symbol} '
+              'имеет Opportunity '
               '${weakestPosition.opportunity.score}/100.',
           impact: -1,
         ),

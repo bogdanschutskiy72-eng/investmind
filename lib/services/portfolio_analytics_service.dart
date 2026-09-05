@@ -7,6 +7,8 @@ import 'historical_price_service.dart';
 import 'portfolio_service.dart';
 import 'stock_service.dart';
 
+enum PortfolioAnalyticsStatus { empty, complete, partial }
+
 class PortfolioAnalyticsPosition {
   final PortfolioPosition position;
   final StockQuote quote;
@@ -50,6 +52,10 @@ class PortfolioAnalyticsResult {
 
   final List<String> warnings;
 
+  final PortfolioAnalyticsStatus status;
+  final int requestedPositionCount;
+  final List<String> failedSymbols;
+
   const PortfolioAnalyticsResult({
     required this.positions,
     required this.investedAmount,
@@ -63,7 +69,36 @@ class PortfolioAnalyticsResult {
     required this.largestPositionWeightPercent,
     required this.largestPositionSymbol,
     required this.warnings,
+    required this.status,
+    required this.requestedPositionCount,
+    required this.failedSymbols,
   });
+
+  int get loadedPositionCount => positions.length;
+
+  bool get isComplete {
+    return status == PortfolioAnalyticsStatus.complete;
+  }
+
+  bool get isPartial {
+    return status == PortfolioAnalyticsStatus.partial;
+  }
+
+  bool get isEmpty {
+    return status == PortfolioAnalyticsStatus.empty;
+  }
+
+  bool get hasFailures {
+    return failedSymbols.isNotEmpty;
+  }
+
+  double get completionPercent {
+    if (requestedPositionCount <= 0) {
+      return 100.0;
+    }
+
+    return loadedPositionCount / requestedPositionCount * 100.0;
+  }
 }
 
 class PortfolioAnalyticsService {
@@ -105,25 +140,28 @@ class PortfolioAnalyticsService {
         largestPositionWeightPercent: 0,
         largestPositionSymbol: null,
         warnings: [],
+        status: PortfolioAnalyticsStatus.empty,
+        requestedPositionCount: 0,
+        failedSymbols: [],
       );
     }
 
     final loaded = <_LoadedPosition>[];
+    final failedSymbols = <String>[];
 
     for (final position in positions) {
+      final symbol = position.symbol.trim().toUpperCase();
+
       try {
-        final symbol = position.symbol.trim().toUpperCase();
+        final results = await Future.wait<dynamic>([
+          _stockService.fetchQuote(symbol),
+          _comparisonService.loadCompany(symbol),
+          _historicalPriceService.fetchAnalysis(symbol, days: 90),
+        ]);
 
-        final quoteFuture = _stockService.fetchQuote(symbol);
-        final comparisonFuture = _comparisonService.loadCompany(symbol);
-        final historicalFuture = _historicalPriceService.fetchAnalysis(
-          symbol,
-          days: 90,
-        );
-
-        final quote = await quoteFuture;
-        final comparison = await comparisonFuture;
-        final historical = await historicalFuture;
+        final quote = results[0] as StockQuote;
+        final comparison = results[1] as CompanyComparison;
+        final historical = results[2] as HistoricalPriceAnalysis;
 
         final marketSignals = _marketSignalService.buildSignals(
           quote: quote,
@@ -136,6 +174,7 @@ class PortfolioAnalyticsService {
         );
 
         final currentValue = quote.currentPrice * position.quantity;
+
         final profit = currentValue - position.investedAmount;
 
         final profitPercent = position.investedAmount <= 0
@@ -155,19 +194,22 @@ class PortfolioAnalyticsService {
           ),
         );
       } catch (_) {
-        // Одна проблемная позиция не должна ломать аналитику всего портфеля.
+        if (symbol.isNotEmpty && !failedSymbols.contains(symbol)) {
+          failedSymbols.add(symbol);
+        }
       }
     }
 
     if (loaded.isEmpty) {
       throw StateError(
-        'Не удалось получить аналитику ни по одной позиции портфеля.',
+        'Не удалось получить аналитику ни по одной позиции портфеля. '
+        'Проблемные тикеры: ${failedSymbols.join(', ')}.',
       );
     }
 
-    final investedAmount = positions.fold<double>(
+    final investedAmount = loaded.fold<double>(
       0,
-      (sum, position) => sum + position.investedAmount,
+      (sum, item) => sum + item.position.investedAmount,
     );
 
     final currentValue = loaded.fold<double>(
@@ -227,11 +269,17 @@ class PortfolioAnalyticsService {
 
     final largestPosition = resultPositions.first;
 
+    final status = failedSymbols.isEmpty
+        ? PortfolioAnalyticsStatus.complete
+        : PortfolioAnalyticsStatus.partial;
+
     final warnings = _buildWarnings(
       resultPositions,
       investMindScore: investMindScore,
       opportunityScore: opportunityScore,
       confidenceScore: confidenceScore,
+      requestedPositionCount: positions.length,
+      failedSymbols: failedSymbols,
     );
 
     return PortfolioAnalyticsResult(
@@ -247,6 +295,9 @@ class PortfolioAnalyticsService {
       largestPositionWeightPercent: largestPosition.weightPercent,
       largestPositionSymbol: largestPosition.position.symbol,
       warnings: warnings,
+      status: status,
+      requestedPositionCount: positions.length,
+      failedSymbols: List<String>.unmodifiable(failedSymbols),
     );
   }
 
@@ -280,6 +331,8 @@ class PortfolioAnalyticsService {
     required int investMindScore,
     required int opportunityScore,
     required int confidenceScore,
+    required int requestedPositionCount,
+    required List<String> failedSymbols,
   }) {
     final warnings = <String>[];
 
@@ -287,40 +340,65 @@ class PortfolioAnalyticsService {
       return warnings;
     }
 
+    if (failedSymbols.isNotEmpty) {
+      warnings.add(
+        'Аналитика портфеля неполная: загружено '
+        '${positions.length} из $requestedPositionCount позиций. '
+        'Не удалось получить данные: ${failedSymbols.join(', ')}.',
+      );
+    }
+
     final largest = positions.first;
 
     if (largest.weightPercent >= 50) {
       warnings.add(
         '${largest.position.symbol} занимает '
-        '${largest.weightPercent.toStringAsFixed(1)}% портфеля — '
+        '${largest.weightPercent.toStringAsFixed(1)}% '
+        'проанализированной части портфеля — '
         'очень высокая концентрация.',
       );
     } else if (largest.weightPercent >= 35) {
       warnings.add(
         '${largest.position.symbol} занимает '
-        '${largest.weightPercent.toStringAsFixed(1)}% портфеля — '
+        '${largest.weightPercent.toStringAsFixed(1)}% '
+        'проанализированной части портфеля — '
         'концентрация повышена.',
       );
     }
 
-    if (positions.length == 1) {
-      warnings.add(
-        'Портфель состоит из одной позиции и почти не диверсифицирован.',
-      );
-    } else if (positions.length <= 3) {
-      warnings.add('В портфеле мало позиций — диверсификация ограничена.');
+    if (failedSymbols.isEmpty) {
+      if (positions.length == 1) {
+        warnings.add(
+          'Портфель состоит из одной позиции '
+          'и почти не диверсифицирован.',
+        );
+      } else if (positions.length <= 3) {
+        warnings.add(
+          'В портфеле мало позиций — '
+          'диверсификация ограничена.',
+        );
+      }
     }
 
     if (investMindScore < 50) {
-      warnings.add('Средневзвешенный InvestMind Score портфеля ниже 50.');
+      warnings.add(
+        'Средневзвешенный InvestMind Score '
+        'проанализированных позиций ниже 50.',
+      );
     }
 
     if (opportunityScore < 50) {
-      warnings.add('Средневзвешенный Opportunity Score портфеля ниже 50.');
+      warnings.add(
+        'Средневзвешенный Opportunity Score '
+        'проанализированных позиций ниже 50.',
+      );
     }
 
     if (confidenceScore < 70) {
-      warnings.add('Уверенность аналитических данных по портфелю ниже 70%.');
+      warnings.add(
+        'Уверенность аналитических данных '
+        'по проанализированным позициям ниже 70%.',
+      );
     }
 
     final weakPositions = positions

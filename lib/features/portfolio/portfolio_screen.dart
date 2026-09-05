@@ -613,7 +613,13 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         }
 
         final result = snapshot.data!;
+
+        if (result.isPartial) {
+          return _buildPartialAnalyticsState(result);
+        }
+
         final health = _portfolioHealthService.calculate(result);
+
         final recommendations = _portfolioRecommendationService.build(
           analytics: result,
           health: health,
@@ -1301,6 +1307,92 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     );
   }
 
+  Widget _buildPartialAnalyticsState(PortfolioAnalyticsResult result) {
+    final failedText = result.failedSymbols.isEmpty
+        ? 'Неизвестные позиции'
+        : result.failedSymbols.join(', ');
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.orangeAccent,
+                size: 24,
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Аналитика портфеля неполная',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          Text(
+            'Получены данные по '
+            '${result.loadedPositionCount} из '
+            '${result.requestedPositionCount} позиций.',
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+
+          const SizedBox(height: 6),
+
+          Text(
+            'Не удалось загрузить: $failedText.',
+            style: const TextStyle(
+              color: Colors.orangeAccent,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          const Text(
+            'Portfolio Health, рекомендации и симулятор '
+            'временно не рассчитываются, чтобы не показывать '
+            'искажённый результат.',
+            style: TextStyle(color: Colors.white60, fontSize: 11, height: 1.45),
+          ),
+
+          const SizedBox(height: 16),
+
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: _refreshData,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Повторить'),
+              ),
+
+              const SizedBox(width: 8),
+
+              Text(
+                '${result.completionPercent.toStringAsFixed(0)}% данных',
+                style: const TextStyle(color: Colors.white38, fontSize: 10),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPortfolioHealthHero(PortfolioHealthResult health) {
     final accent = _healthAccentColor(health.level);
 
@@ -1574,7 +1666,6 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   }
 
   Widget _buildSimulationCard(PortfolioSimulationResult simulation) {
-    
     final healthImproved = simulation.healthDelta >= 0;
 
     final IconData scenarioIcon;

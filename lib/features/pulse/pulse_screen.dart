@@ -1,9 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
-import 'dart:async';
-import '../market/market_data_cache.dart';
 import '../../services/portfolio_analytics_service.dart';
 import '../../services/portfolio_service.dart';
+import '../market/market_data_cache.dart';
 import '../portfolio/portfolio_health_service.dart';
 import 'market_pulse_service.dart';
 import 'pulse_event.dart';
@@ -28,8 +29,11 @@ class _PulseScreenState extends State<PulseScreen> {
 
   final MarketDataCache _marketDataCache = MarketDataCache.instance;
 
+  Timer? _marketRefreshDebounce;
+
   bool _isLoading = true;
   String? _error;
+  String? _portfolioAnalyticsWarning;
 
   PortfolioHealthResult? _health;
 
@@ -52,6 +56,8 @@ class _PulseScreenState extends State<PulseScreen> {
 
     _marketDataCache.removeListener(_handleMarketDataChanged);
 
+    _marketRefreshDebounce?.cancel();
+
     super.dispose();
   }
 
@@ -60,7 +66,12 @@ class _PulseScreenState extends State<PulseScreen> {
   }
 
   void _handleMarketDataChanged() {
-    _loadMarketPulse();
+    _marketRefreshDebounce?.cancel();
+
+    _marketRefreshDebounce = Timer(
+      const Duration(milliseconds: 700),
+      _loadMarketPulse,
+    );
   }
 
   Future<void> _loadPulse() async {
@@ -71,25 +82,48 @@ class _PulseScreenState extends State<PulseScreen> {
     setState(() {
       _isLoading = true;
       _error = null;
+      _portfolioAnalyticsWarning = null;
     });
 
     try {
       final positions = PortfolioService.instance.positions.value;
 
       PortfolioHealthResult? health;
+      String? portfolioWarning;
+
       final portfolioEvents = <PulseEvent>[];
 
       if (positions.isNotEmpty) {
-        final analytics = await _analyticsService.analyze(positions);
+        try {
+          final analytics = await _analyticsService.analyze(positions);
 
-        health = _healthService.calculate(analytics);
+          if (analytics.isPartial) {
+            final failedText = analytics.failedSymbols.isEmpty
+                ? 'часть позиций'
+                : analytics.failedSymbols.join(', ');
 
-        portfolioEvents.addAll(
-          _pulseService.buildPortfolioEvents(
-            analytics: analytics,
-            health: health,
-          ),
-        );
+            portfolioWarning =
+                'Portfolio Health временно не рассчитан. '
+                'Получены данные по '
+                '${analytics.loadedPositionCount} из '
+                '${analytics.requestedPositionCount} позиций. '
+                'Не удалось загрузить: $failedText.';
+          } else {
+            health = _healthService.calculate(analytics);
+
+            portfolioEvents.addAll(
+              _pulseService.buildPortfolioEvents(
+                analytics: analytics,
+                health: health,
+              ),
+            );
+          }
+        } catch (_) {
+          portfolioWarning =
+              'Данные портфеля временно недоступны. '
+              'Portfolio Health и события портфеля '
+              'не рассчитываются до получения полного анализа.';
+        }
       }
 
       portfolioEvents.sort(_compareEvents);
@@ -100,6 +134,7 @@ class _PulseScreenState extends State<PulseScreen> {
 
       setState(() {
         _health = health;
+        _portfolioAnalyticsWarning = portfolioWarning;
         _events = portfolioEvents;
         _isLoading = false;
       });
@@ -193,7 +228,9 @@ class _PulseScreenState extends State<PulseScreen> {
 
           const SizedBox(height: 16),
 
-          if (_health != null)
+          if (_portfolioAnalyticsWarning != null)
+            _buildPortfolioUnavailableCard()
+          else if (_health != null)
             _buildPortfolioSummary(_health!)
           else
             _buildEmptyPortfolioCard(),
@@ -334,6 +371,64 @@ class _PulseScreenState extends State<PulseScreen> {
               _summaryScore('Opportunity', health.opportunityScore),
               _summaryScore('Устойчивость', health.riskScore),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPortfolioUnavailableCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.warning_amber_rounded,
+            color: Colors.orangeAccent,
+            size: 25,
+          ),
+
+          const SizedBox(width: 12),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Аналитика портфеля неполная',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                ),
+
+                const SizedBox(height: 5),
+
+                Text(
+                  _portfolioAnalyticsWarning ?? '',
+                  style: const TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontSize: 10,
+                    height: 1.45,
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                const Text(
+                  'Рыночные события Pulse продолжают работать.',
+                  style: TextStyle(
+                    color: Color(0xFF20D3C2),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -508,12 +603,16 @@ class _PulseScreenState extends State<PulseScreen> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
+
                     const SizedBox(width: 8),
+
                     const Text(
                       '•',
                       style: TextStyle(color: Color(0xFF64748B), fontSize: 9),
                     ),
+
                     const SizedBox(width: 8),
+
                     Text(
                       _freshnessText(event.createdAt),
                       style: const TextStyle(
@@ -631,8 +730,11 @@ class _PulseScreenState extends State<PulseScreen> {
     }
 
     final day = createdAt.day.toString().padLeft(2, '0');
+
     final month = createdAt.month.toString().padLeft(2, '0');
+
     final hour = createdAt.hour.toString().padLeft(2, '0');
+
     final minute = createdAt.minute.toString().padLeft(2, '0');
 
     return 'обновлено $day.$month в $hour:$minute';
