@@ -270,7 +270,10 @@ class _MarketScreenState extends State<MarketScreen> {
     }
 
     try {
-      final quote = await _stockService.fetchQuote(symbol);
+      final quote = await _stockService.fetchQuote(
+        symbol,
+        forceRefresh: forceRefresh,
+      );
 
       _marketDataCache.saveQuote(company: company, quote: quote);
 
