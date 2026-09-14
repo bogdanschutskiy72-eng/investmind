@@ -372,6 +372,81 @@ class MarketDataCache extends ChangeNotifier {
     notifyListeners();
   }
 
+  void restoreQuote({
+    required MarketCompany company,
+    required StockQuote quote,
+    required DateTime updatedAt,
+  }) {
+    final symbol = _normalizeSymbol(company.symbol);
+
+    final existing = _companies[symbol];
+
+    final marketTimestamp = _latestMarketTimestamp(
+      quoteUpdatedAt: updatedAt,
+      historicalUpdatedAt: existing?.historicalUpdatedAt,
+    );
+
+    if (existing == null) {
+      _companies[symbol] = MarketCachedCompanyData(
+        company: company,
+        quote: quote,
+        quoteUpdatedAt: updatedAt,
+        marketUpdatedAt: marketTimestamp,
+      );
+
+      notifyListeners();
+      return;
+    }
+
+    _companies[symbol] = existing.copyWith(
+      company: company,
+      quote: quote,
+      quoteUpdatedAt: updatedAt,
+      marketUpdatedAt: marketTimestamp,
+    );
+
+    notifyListeners();
+  }
+
+  void restoreHistorical({
+    required MarketCompany company,
+    required HistoricalPriceAnalysis historical,
+    required DateTime updatedAt,
+    List<MarketSignal> marketSignals = const [],
+  }) {
+    final symbol = _normalizeSymbol(company.symbol);
+
+    final existing = _companies[symbol];
+
+    final marketTimestamp = _latestMarketTimestamp(
+      quoteUpdatedAt: existing?.quoteUpdatedAt,
+      historicalUpdatedAt: updatedAt,
+    );
+
+    if (existing == null) {
+      _companies[symbol] = MarketCachedCompanyData(
+        company: company,
+        historical: historical,
+        marketSignals: List<MarketSignal>.from(marketSignals),
+        historicalUpdatedAt: updatedAt,
+        marketUpdatedAt: marketTimestamp,
+      );
+
+      notifyListeners();
+      return;
+    }
+
+    _companies[symbol] = existing.copyWith(
+      company: company,
+      historical: historical,
+      marketSignals: List<MarketSignal>.from(marketSignals),
+      historicalUpdatedAt: updatedAt,
+      marketUpdatedAt: marketTimestamp,
+    );
+
+    notifyListeners();
+  }
+
   void saveQuote({required MarketCompany company, required StockQuote quote}) {
     final symbol = _normalizeSymbol(company.symbol);
 
@@ -436,6 +511,38 @@ class MarketDataCache extends ChangeNotifier {
       comparison: comparison,
       opportunity: opportunity,
       analysisUpdatedAt: now,
+    );
+
+    notifyListeners();
+  }
+
+  void restoreInvestMindData({
+    required MarketCompany company,
+    required CompanyComparison comparison,
+    required OpportunityScoreResult opportunity,
+    required DateTime updatedAt,
+  }) {
+    final symbol = _normalizeSymbol(company.symbol);
+
+    final existing = _companies[symbol];
+
+    if (existing == null) {
+      _companies[symbol] = MarketCachedCompanyData(
+        company: company,
+        comparison: comparison,
+        opportunity: opportunity,
+        analysisUpdatedAt: updatedAt,
+      );
+
+      notifyListeners();
+      return;
+    }
+
+    _companies[symbol] = existing.copyWith(
+      company: company,
+      comparison: comparison,
+      opportunity: opportunity,
+      analysisUpdatedAt: updatedAt,
     );
 
     notifyListeners();

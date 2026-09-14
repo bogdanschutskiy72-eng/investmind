@@ -263,9 +263,13 @@ class _MarketScreenState extends State<MarketScreen> {
 
     final cached = _marketDataCache.getCompany(symbol);
 
-    if (!forceRefresh &&
-        _marketDataCache.isQuoteFresh(symbol) &&
-        cached?.quote != null) {
+    if (!forceRefresh && cached?.quote != null) {
+      if (_marketDataCache.isQuoteFresh(symbol)) {
+        return cached!.quote!;
+      }
+
+      unawaited(_refreshQuoteInBackground(company));
+
       return cached!.quote!;
     }
 
@@ -284,6 +288,20 @@ class _MarketScreenState extends State<MarketScreen> {
       }
 
       rethrow;
+    }
+  }
+
+  Future<void> _refreshQuoteInBackground(MarketCompany company) async {
+    try {
+      final quote = await _stockService.fetchQuote(
+        company.symbol,
+        forceRefresh: true,
+      );
+
+      _marketDataCache.saveQuote(company: company, quote: quote);
+    } catch (_) {
+      // Старые данные уже показаны пользователю.
+      // Ошибка фонового обновления не должна ломать Market.
     }
   }
 
@@ -567,11 +585,17 @@ class _MarketScreenState extends State<MarketScreen> {
             cached?.marketSignals ??
             const <MarketSignal>[];
 
-        if (_marketDataCache.isInvestMindDataFresh(company.symbol) &&
-            cached?.comparison != null &&
-            cached?.opportunity != null) {
+        if (cached?.comparison != null) {
           analysis = cached!.comparison!;
-          opportunity = cached.opportunity!;
+
+          opportunity = _opportunityScoreService.calculate(
+            company: analysis,
+            marketSignals: marketSignals,
+          );
+
+          if (!_marketDataCache.isInvestMindDataFresh(company.symbol)) {
+            unawaited(_refreshInvestMindInBackground(company, marketSignals));
+          }
         } else {
           analysis = await _comparisonService.loadCompany(company.symbol);
 
@@ -624,6 +648,29 @@ class _MarketScreenState extends State<MarketScreen> {
             '${failedSymbols.join(', ')}.';
       }
     });
+  }
+
+  Future<void> _refreshInvestMindInBackground(
+    MarketCompany company,
+    List<MarketSignal> marketSignals,
+  ) async {
+    try {
+      final analysis = await _comparisonService.loadCompany(company.symbol);
+
+      final opportunity = _opportunityScoreService.calculate(
+        company: analysis,
+        marketSignals: marketSignals,
+      );
+
+      _marketDataCache.saveInvestMindData(
+        company: company,
+        comparison: analysis,
+        opportunity: opportunity,
+      );
+    } catch (_) {
+      // Сохранённый анализ уже показан пользователю.
+      // Ошибка фонового обновления не должна ломать Scanner.
+    }
   }
 
   List<_InvestMindSignal> _buildSignals(CompanyComparison company) {

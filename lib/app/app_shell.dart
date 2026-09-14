@@ -24,7 +24,13 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
 
-    MarketBackgroundRefreshService.instance.start(companyLimit: 12);
+    Future<void>.delayed(const Duration(seconds: 5), () {
+      if (!mounted) {
+        return;
+      }
+
+      MarketBackgroundRefreshService.instance.start(companyLimit: 12);
+    });
   }
 
   void _selectPage(int index) {
