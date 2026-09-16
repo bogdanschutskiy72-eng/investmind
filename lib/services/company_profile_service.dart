@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import 'finnhub_http_client.dart';
 
 class CompanyProfile {
   final String ticker;
@@ -27,9 +27,7 @@ class CompanyProfile {
     required this.webUrl,
   });
 
-  factory CompanyProfile.fromJson(
-    Map<String, dynamic> json,
-  ) {
+  factory CompanyProfile.fromJson(Map<String, dynamic> json) {
     return CompanyProfile(
       ticker: json['ticker']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
@@ -39,78 +37,64 @@ class CompanyProfile {
       industry: json['finnhubIndustry']?.toString() ?? '',
       ipo: json['ipo']?.toString() ?? '',
       marketCapitalization:
-          (json['marketCapitalization'] as num?)
-                  ?.toDouble() ??
-              0,
-      shareOutstanding:
-          (json['shareOutstanding'] as num?)
-                  ?.toDouble() ??
-              0,
+          (json['marketCapitalization'] as num?)?.toDouble() ?? 0,
+      shareOutstanding: (json['shareOutstanding'] as num?)?.toDouble() ?? 0,
       webUrl: json['weburl']?.toString() ?? '',
     );
   }
 }
 
 class CompanyProfileService {
-  static const String _apiKey =
-      String.fromEnvironment('FINNHUB_API_KEY');
+  static const String _apiKey = String.fromEnvironment('FINNHUB_API_KEY');
 
-  Future<CompanyProfile> fetchProfile(
-    String symbol,
-  ) async {
+  Future<CompanyProfile> fetchProfile(String symbol) async {
     if (_apiKey.isEmpty) {
-      throw Exception(
-        'FINNHUB_API_KEY не передан при запуске приложения.',
-      );
+      throw Exception('FINNHUB_API_KEY не передан при запуске приложения.');
     }
 
     final ticker = symbol.trim().toUpperCase();
 
-    final uri = Uri.https(
-      'finnhub.io',
-      '/api/v1/stock/profile2',
-      {
-        'symbol': ticker,
-        'token': _apiKey,
-      },
-    );
+    if (ticker.isEmpty) {
+      throw ArgumentError('Тикер не указан.');
+    }
 
-    final response = await http
-        .get(uri)
-        .timeout(
-          const Duration(seconds: 15),
-        );
+    final uri = Uri.https('finnhub.io', '/api/v1/stock/profile2', {
+      'symbol': ticker,
+      'token': _apiKey,
+    });
 
-    if (response.statusCode == 401 ||
-        response.statusCode == 403) {
-      throw Exception(
-        'Finnhub отклонил API-ключ.',
-      );
+    final response = await FinnhubHttpClient.instance.get(uri);
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      throw Exception('Finnhub отклонил API-ключ.');
     }
 
     if (response.statusCode == 429) {
-      throw Exception(
-        'Finnhub временно ограничил количество запросов.',
-      );
+      throw Exception('Finnhub временно ограничил количество запросов.');
+    }
+
+    if (response.statusCode >= 500) {
+      throw Exception('Finnhub временно недоступен.');
     }
 
     if (response.statusCode != 200) {
-      throw Exception(
-        'Ошибка Finnhub: ${response.statusCode}',
+      throw Exception('Ошибка Finnhub: ${response.statusCode}');
+    }
+
+    final decoded = jsonDecode(response.body);
+
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException(
+        'Finnhub вернул некорректный профиль компании.',
       );
     }
 
-    final data =
-        jsonDecode(response.body) as Map<String, dynamic>;
-
-    if (data.isEmpty ||
-        data['ticker'] == null ||
-        data['ticker'].toString().isEmpty) {
-      throw Exception(
-        'Данные компании $ticker не найдены.',
-      );
+    if (decoded.isEmpty ||
+        decoded['ticker'] == null ||
+        decoded['ticker'].toString().isEmpty) {
+      throw Exception('Данные компании $ticker не найдены.');
     }
 
-    return CompanyProfile.fromJson(data);
+    return CompanyProfile.fromJson(decoded);
   }
 }

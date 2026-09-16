@@ -68,6 +68,7 @@ class _AppShellState extends State<AppShell> {
               children: [
                 NavigationRail(
                   extended: isWideDesktop,
+                  scrollable: true,
                   selectedIndex: _selectedIndex > 7 ? 0 : _selectedIndex,
                   onDestinationSelected: _selectPage,
                   backgroundColor: const Color(0xFF0F172A),

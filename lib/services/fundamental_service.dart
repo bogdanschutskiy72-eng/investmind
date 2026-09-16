@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import 'finnhub_http_client.dart';
 
 class FundamentalData {
   final String symbol;
@@ -137,16 +137,6 @@ class FundamentalData {
       hasDebtToEquityData ||
       hasFreeCashFlowPerShareData ||
       hasBetaData;
-
-  // ------------------------------------------------------------
-  // DATA COMPLETENESS// ------------------------------------------------------------
-  //
-  // Не все показатели одинаково важны.
-  // Поэтому полнота считается по весам,
-  // а не просто по количеству доступных полей.
-  //
-  // Общая сумма весов = 100.
-  // ------------------------------------------------------------
 
   int get dataCompletenessPercent {
     int score = 0;
@@ -304,49 +294,29 @@ class FundamentalData {
   Map<String, dynamic> toJson() {
     return {
       'symbol': symbol,
-
       'pe': hasPeData ? pe : null,
-
       'forwardPe': hasForwardPeData ? forwardPe : null,
-
       'priceToSales': hasPriceToSalesData ? priceToSales : null,
-
       'eps': hasEpsData ? eps : null,
-
       'epsGrowthPercent': hasEpsGrowthData ? epsGrowthPercent : null,
-
       'revenueGrowthPercent': hasRevenueGrowthData
           ? revenueGrowthPercent
           : null,
-
       'grossMarginPercent': hasGrossMarginData ? grossMarginPercent : null,
-
       'netMarginPercent': hasNetMarginData ? netMarginPercent : null,
-
       'roePercent': hasRoeData ? roePercent : null,
-
       'currentRatio': hasCurrentRatioData ? currentRatio : null,
-
       'quickRatio': hasQuickRatioData ? quickRatio : null,
-
       'debtToEquity': hasDebtToEquityData ? debtToEquity : null,
-
       'freeCashFlowPerShare': hasFreeCashFlowPerShareData
           ? freeCashFlowPerShare
           : null,
-
       'beta': hasBetaData ? beta : null,
-
       'week52High': hasWeek52HighData ? week52High : null,
-
       'week52Low': hasWeek52LowData ? week52Low : null,
-
       'dataCompletenessPercent': dataCompletenessPercent,
-
       'dataCompletenessRating': dataCompletenessRating,
-
       'missingCoreMetrics': missingCoreMetrics,
-
       'availableMetrics': availableMetrics.toList(),
     };
   }
@@ -365,15 +335,17 @@ class FundamentalService {
 
     final String ticker = symbol.trim().toUpperCase();
 
+    if (ticker.isEmpty) {
+      throw ArgumentError('Тикер не указан.');
+    }
+
     final Uri uri = Uri.https('finnhub.io', '/api/v1/stock/metric', {
       'symbol': ticker,
       'metric': 'all',
       'token': _apiKey,
     });
 
-    final http.Response response = await http
-        .get(uri)
-        .timeout(const Duration(seconds: 15));
+    final response = await FinnhubHttpClient.instance.get(uri);
 
     if (response.statusCode == 401 || response.statusCode == 403) {
       throw Exception('Finnhub отклонил API-ключ.');
@@ -384,6 +356,10 @@ class FundamentalService {
         'Finnhub временно ограничил '
         'количество запросов.',
       );
+    }
+
+    if (response.statusCode >= 500) {
+      throw Exception('Finnhub временно недоступен.');
     }
 
     if (response.statusCode != 200) {
@@ -426,68 +402,51 @@ class FundamentalService {
 
     return FundamentalData(
       symbol: ticker,
-
       pe: _readDouble(metric, ['peTTM', 'peBasicExclExtraTTM']),
-
       forwardPe: _readDouble(metric, ['forwardPE', 'forwardPe']),
-
       priceToSales: _readDouble(metric, ['psTTM', 'priceToSalesTTM']),
-
       eps: _readDouble(metric, ['epsTTM', 'epsBasicExclExtraItemsTTM']),
-
       epsGrowthPercent: _readDouble(metric, [
         'epsGrowthTTMYoy',
         'epsGrowthQuarterlyYoy',
         'epsGrowth3Y',
         'epsGrowth5Y',
       ]),
-
       revenueGrowthPercent: _readDouble(metric, [
         'revenueGrowthTTMYoy',
         'revenueGrowthQuarterlyYoy',
         'revenueGrowth3Y',
         'revenueGrowth5Y',
       ]),
-
       grossMarginPercent: _readDouble(metric, [
         'grossMarginTTM',
         'grossMarginAnnual',
       ]),
-
       netMarginPercent: _readDouble(metric, [
         'netProfitMarginTTM',
         'netProfitMarginAnnual',
       ]),
-
       roePercent: _readDouble(metric, ['roeTTM', 'roeAnnual']),
-
       currentRatio: _readDouble(metric, [
         'currentRatioQuarterly',
         'currentRatioAnnual',
       ]),
-
       quickRatio: _readDouble(metric, [
         'quickRatioQuarterly',
         'quickRatioAnnual',
       ]),
-
       debtToEquity: _readDouble(metric, [
         'totalDebt/totalEquityQuarterly',
         'totalDebt/totalEquityAnnual',
       ]),
-
       freeCashFlowPerShare: _readDouble(metric, [
         'freeCashFlowPerShareTTM',
         'freeCashFlowPerShareQuarterly',
         'freeCashFlowPerShareAnnual',
       ]),
-
       beta: _readDouble(metric, ['beta']),
-
       week52High: _readDouble(metric, ['52WeekHigh']),
-
       week52Low: _readDouble(metric, ['52WeekLow']),
-
       availableMetrics: availableMetrics,
     );
   }
