@@ -104,7 +104,10 @@ class AiComparisonBackendResponse {
 class AiComparisonService {
   const AiComparisonService();
 
-  static const String _backendBaseUrl = 'http://localhost:3000';
+  static const String _backendBaseUrl = String.fromEnvironment(
+    'BACKEND_URL',
+    defaultValue: 'http://localhost:3000',
+  );
 
   Future<AiComparisonBackendResponse> compareCompanies(
     List<CompanyComparison> companies,
