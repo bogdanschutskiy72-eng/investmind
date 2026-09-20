@@ -3,6 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const OpenAI = require('openai');
+const { rateLimit } = require('express-rate-limit');
 
 const {
   MarketDataCache,
@@ -78,8 +79,75 @@ if (!TWELVE_DATA_API_KEY) {
   );
 }
 
+// ------------------------------------------------------------
+// Middleware
+// ------------------------------------------------------------
+
 app.use(cors());
-app.use(express.json());
+
+app.use(
+  express.json({
+    limit: '100kb',
+  }),
+);
+
+// ------------------------------------------------------------
+// Rate limits
+// ------------------------------------------------------------
+
+function rateLimitHandler(message) {
+  return (req, res) => {
+    res.status(429).json({
+      status: 'error',
+      message,
+    });
+  };
+}
+
+const marketRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 180,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  handler: rateLimitHandler(
+    'Слишком много запросов к рыночным данным. Попробуйте немного позже.',
+  ),
+});
+
+const searchRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  handler: rateLimitHandler(
+    'Слишком много поисковых запросов. Попробуйте немного позже.',
+  ),
+});
+
+const analyzeRateLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  handler: rateLimitHandler(
+    'Лимит Deep Analysis временно исчерпан. Попробуйте позже.',
+  ),
+});
+
+const compareRateLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 8,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  handler: rateLimitHandler(
+    'Лимит AI Comparison временно исчерпан. Попробуйте позже.',
+  ),
+});
+
+app.use(
+  '/api/market',
+  marketRateLimiter,
+);
 
 // ------------------------------------------------------------
 // Common helpers
@@ -485,8 +553,6 @@ async function sendTwelveDataRequest(
         ? CACHE_TTL.dailyHistory
         : CACHE_TTL.intraday;
 
-    // Для дневных данных 30 / 90 / 365
-    // используем один общий набор до 365 дней.
     const requestedSize =
       outputSize;
 
@@ -751,6 +817,7 @@ app.get(
 
 app.get(
   '/api/market/search',
+  searchRateLimiter,
   async (req, res) => {
     try {
       const query =
@@ -910,8 +977,7 @@ app.get(
   },
 );
 
-// ------------------------------------------------------------
-// Sector detection
+// ------------------------------------------------------------// Sector detection
 // ------------------------------------------------------------
 
 function resolveSectorProfile(
@@ -1184,6 +1250,7 @@ valuation и финансовую устойчивость.
 
 app.post(
   '/api/analyze',
+  analyzeRateLimiter,
   async (req, res) => {
     try {
       const data = req.body;
@@ -1471,6 +1538,7 @@ watch:
 
 app.post(
   '/api/compare',
+  compareRateLimiter,
   async (req, res) => {
     try {
       const data = req.body;
@@ -1885,6 +1953,43 @@ tradeoffs и companyInsights
             'Не удалось выполнить AI Comparison',
         });
     }
+  },
+);
+
+// ------------------------------------------------------------
+// JSON/body errors
+// ------------------------------------------------------------
+
+app.use(
+  (error, req, res, next) => {
+    if (
+      error?.type ===
+      'entity.too.large'
+    ) {
+      return res
+        .status(413)
+        .json({
+          status: 'error',
+          message:
+            'Запрос слишком большой.',
+        });
+    }
+
+    if (
+      error instanceof SyntaxError &&
+      error.status === 400 &&
+      'body' in error
+    ) {
+      return res
+        .status(400)
+        .json({
+          status: 'error',
+          message:
+            'Некорректный JSON.',
+        });
+    }
+
+    next(error);
   },
 );
 
