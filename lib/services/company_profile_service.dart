@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'finnhub_http_client.dart';
+import 'package:http/http.dart' as http;
 
 class CompanyProfile {
   final String ticker;
@@ -45,54 +45,61 @@ class CompanyProfile {
 }
 
 class CompanyProfileService {
-  static const String _apiKey = String.fromEnvironment('FINNHUB_API_KEY');
+  static const String _backendBaseUrl = String.fromEnvironment(
+    'BACKEND_URL',
+    defaultValue: 'http://localhost:3000',
+  );
 
   Future<CompanyProfile> fetchProfile(String symbol) async {
-    if (_apiKey.isEmpty) {
-      throw Exception('FINNHUB_API_KEY не передан при запуске приложения.');
-    }
-
     final ticker = symbol.trim().toUpperCase();
 
     if (ticker.isEmpty) {
       throw ArgumentError('Тикер не указан.');
     }
 
-    final uri = Uri.https('finnhub.io', '/api/v1/stock/profile2', {
-      'symbol': ticker,
-      'token': _apiKey,
-    });
+    final uri = Uri.parse(
+      '$_backendBaseUrl/api/market/profile',
+    ).replace(queryParameters: {'symbol': ticker});
 
-    final response = await FinnhubHttpClient.instance.get(uri);
-
-    if (response.statusCode == 401 || response.statusCode == 403) {
-      throw Exception('Finnhub отклонил API-ключ.');
-    }
+    final response = await http.get(uri).timeout(const Duration(seconds: 25));
 
     if (response.statusCode == 429) {
-      throw Exception('Finnhub временно ограничил количество запросов.');
+      throw Exception(
+        'Источник данных временно '
+        'ограничил запросы.',
+      );
     }
 
     if (response.statusCode >= 500) {
-      throw Exception('Finnhub временно недоступен.');
+      throw Exception(
+        'Сервер InvestMind временно '
+        'недоступен.',
+      );
     }
 
     if (response.statusCode != 200) {
-      throw Exception('Ошибка Finnhub: ${response.statusCode}');
+      throw Exception(
+        'Ошибка получения профиля компании: '
+        'HTTP ${response.statusCode}',
+      );
     }
 
     final decoded = jsonDecode(response.body);
 
     if (decoded is! Map<String, dynamic>) {
       throw const FormatException(
-        'Finnhub вернул некорректный профиль компании.',
+        'Сервер вернул некорректный '
+        'профиль компании.',
       );
     }
 
     if (decoded.isEmpty ||
         decoded['ticker'] == null ||
         decoded['ticker'].toString().isEmpty) {
-      throw Exception('Данные компании $ticker не найдены.');
+      throw Exception(
+        'Данные компании $ticker '
+        'не найдены.',
+      );
     }
 
     return CompanyProfile.fromJson(decoded);

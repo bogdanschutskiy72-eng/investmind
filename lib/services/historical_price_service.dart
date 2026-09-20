@@ -51,14 +51,11 @@ class HistoricalPriceAnalysis {
 }
 
 class HistoricalPriceService {
-  static const String _apiKey = String.fromEnvironment('TWELVE_DATA_API_KEY');
+  static const String _backendBaseUrl = String.fromEnvironment(
+    'BACKEND_URL',
+    defaultValue: 'http://localhost:3000',
+  );
 
-  // Twelve Data free plan currently allows 8 API credits per minute.
-  // 8 seconds between requests keeps us safely below that limit.
-  static const Duration _minimumRequestInterval = Duration(seconds: 8);
-
-  // Historical daily data does not need to be downloaded again every time
-  // the user changes a filter or reopens a company.
   static const Duration _cacheDuration = Duration(minutes: 30);
 
   static const int _maxAttempts = 2;
@@ -69,16 +66,11 @@ class HistoricalPriceService {
   static final Map<String, Future<HistoricalPriceAnalysis>> _inFlight =
       <String, Future<HistoricalPriceAnalysis>>{};
 
-  static Future<void> _rateLimitQueue = Future<void>.value();
-  static DateTime? _lastRequestStartedAt;
-
   Future<HistoricalPriceAnalysis> fetchAnalysis(
     String symbol, {
     int days = 90,
     bool forceRefresh = false,
   }) async {
-    _checkApiKey();
-
     final String ticker = symbol.trim().toUpperCase();
 
     if (ticker.isEmpty) {
@@ -90,6 +82,7 @@ class HistoricalPriceService {
     }
 
     final String cacheKey = '$ticker:$days';
+
     final cached = _cache[cacheKey];
 
     if (!forceRefresh && cached != null && !cached.isExpired) {
@@ -117,21 +110,13 @@ class HistoricalPriceService {
     }
   }
 
-  void _checkApiKey() {
-    if (_apiKey.isEmpty) {
-      throw StateError(
-        'TWELVE_DATA_API_KEY не передан при запуске приложения.',
-      );
-    }
-  }
-
   Future<HistoricalPriceAnalysis> _loadAnalysis(
     String ticker,
     int days, {
     HistoricalPriceAnalysis? staleAnalysis,
   }) async {
     try {
-      final analysis = await _fetchAnalysisFromApi(ticker, days);
+      final analysis = await _fetchAnalysisFromBackend(ticker, days);
 
       _cache['$ticker:$days'] = _CachedHistoricalAnalysis(
         analysis: analysis,
@@ -139,7 +124,7 @@ class HistoricalPriceService {
       );
 
       return analysis;
-    } on _TemporaryTwelveDataException {
+    } on _TemporaryHistoricalDataException {
       if (staleAnalysis != null) {
         return staleAnalysis;
       }
@@ -150,94 +135,103 @@ class HistoricalPriceService {
         return staleAnalysis;
       }
 
-      throw Exception('Twelve Data временно не отвечает. Повтори позже.');
+      throw Exception(
+        'Сервер InvestMind временно не отвечает. '
+        'Повтори позже.',
+      );
     } on http.ClientException {
       if (staleAnalysis != null) {
         return staleAnalysis;
       }
 
-      throw Exception('Не удалось подключиться к Twelve Data.');
+      throw Exception(
+        'Не удалось подключиться '
+        'к серверу InvestMind.',
+      );
     }
   }
 
-  Future<HistoricalPriceAnalysis> _fetchAnalysisFromApi(
+  Future<HistoricalPriceAnalysis> _fetchAnalysisFromBackend(
     String ticker,
     int days,
   ) async {
-    final Uri uri = Uri.https('api.twelvedata.com', '/time_series', {
-      'symbol': ticker,
-      'interval': '1day',
-      'outputsize': days.toString(),
-      'order': 'ASC',
-      'apikey': _apiKey,
-    });
+    final uri = Uri.parse('$_backendBaseUrl/api/market/time-series').replace(
+      queryParameters: {
+        'symbol': ticker,
+        'interval': '1day',
+        'outputsize': days.toString(),
+        'order': 'ASC',
+      },
+    );
 
     Object? lastError;
 
     for (var attempt = 1; attempt <= _maxAttempts; attempt++) {
       try {
-        await _waitForRequestSlot();
-
-        final http.Response response = await http
+        final response = await http
             .get(uri)
-            .timeout(const Duration(seconds: 20));
-
-        if (response.statusCode == 401 || response.statusCode == 403) {
-          throw Exception(
-            'Twelve Data отклонил API-ключ. '
-            'Проверь TWELVE_DATA_API_KEY.',
-          );
-        }
+            .timeout(const Duration(seconds: 90));
 
         if (response.statusCode == 429) {
           if (attempt < _maxAttempts) {
             await Future<void>.delayed(const Duration(seconds: 10));
+
             continue;
           }
 
-          throw const _TemporaryTwelveDataException(
-            'Превышен минутный лимит Twelve Data.',
+          throw const _TemporaryHistoricalDataException(
+            'Источник исторических данных '
+            'временно ограничил запросы.',
           );
         }
 
         if (response.statusCode >= 500) {
           if (attempt < _maxAttempts) {
             await Future<void>.delayed(const Duration(seconds: 5));
+
             continue;
           }
 
-          throw const _TemporaryTwelveDataException(
-            'Twelve Data временно недоступен.',
+          throw const _TemporaryHistoricalDataException(
+            'Сервер InvestMind временно недоступен.',
           );
         }
 
         if (response.statusCode != 200) {
-          throw Exception('Ошибка Twelve Data: HTTP ${response.statusCode}');
+          throw Exception(
+            'Ошибка получения исторических данных: '
+            'HTTP ${response.statusCode}',
+          );
         }
 
         final dynamic decoded = jsonDecode(response.body);
 
         if (decoded is! Map) {
-          throw const FormatException('Некорректный ответ Twelve Data.');
+          throw const FormatException('Некорректный ответ сервера.');
         }
 
         final Map<String, dynamic> data = Map<String, dynamic>.from(decoded);
 
         if (data['status'] == 'error') {
           final String message =
-              data['message']?.toString() ?? 'Twelve Data вернул ошибку.';
+              data['message']?.toString() ??
+              'Источник исторических данных '
+                  'вернул ошибку.';
 
           final lowerMessage = message.toLowerCase();
 
           if (lowerMessage.contains('credit') ||
               lowerMessage.contains('limit') ||
-              lowerMessage.contains('rate')) {
+              lowerMessage.contains('rate') ||
+              lowerMessage.contains('слишком много') ||
+              lowerMessage.contains('огранич')) {
             if (attempt < _maxAttempts) {
               await Future<void>.delayed(const Duration(seconds: 10));
+
               continue;
             }
 
-            throw _TemporaryTwelveDataException(message);
+            throw _TemporaryHistoricalDataException(message);
           }
 
           throw Exception(message);
@@ -249,6 +243,7 @@ class HistoricalPriceService {
 
         if (attempt < _maxAttempts) {
           await Future<void>.delayed(const Duration(seconds: 5));
+
           continue;
         }
       } on http.ClientException catch (error) {
@@ -256,6 +251,7 @@ class HistoricalPriceService {
 
         if (attempt < _maxAttempts) {
           await Future<void>.delayed(const Duration(seconds: 5));
+
           continue;
         }
       }
@@ -269,40 +265,9 @@ class HistoricalPriceService {
       throw lastError;
     }
 
-    throw const _TemporaryTwelveDataException(
-      'Не удалось получить исторические данные Twelve Data.',
+    throw const _TemporaryHistoricalDataException(
+      'Не удалось получить исторические данные.',
     );
-  }
-
-  Future<void> _waitForRequestSlot() {
-    final completer = Completer<void>();
-
-    _rateLimitQueue = _rateLimitQueue
-        .then((_) async {
-          final lastRequest = _lastRequestStartedAt;
-
-          if (lastRequest != null) {
-            final elapsed = DateTime.now().difference(lastRequest);
-            final remaining = _minimumRequestInterval - elapsed;
-
-            if (remaining > Duration.zero) {
-              await Future<void>.delayed(remaining);
-            }
-          }
-
-          _lastRequestStartedAt = DateTime.now();
-
-          if (!completer.isCompleted) {
-            completer.complete();
-          }
-        })
-        .catchError((Object error, StackTrace stackTrace) {
-          if (!completer.isCompleted) {
-            completer.completeError(error, stackTrace);
-          }
-        });
-
-    return completer.future;
   }
 
   HistoricalPriceAnalysis _buildAnalysisFromResponse(
@@ -312,7 +277,10 @@ class HistoricalPriceService {
     final dynamic rawValues = data['values'];
 
     if (rawValues is! List || rawValues.isEmpty) {
-      throw Exception('Исторические данные для $ticker не найдены.');
+      throw Exception(
+        'Исторические данные для '
+        '$ticker не найдены.',
+      );
     }
 
     final List<HistoricalPricePoint> prices = [];
@@ -344,7 +312,10 @@ class HistoricalPriceService {
     }
 
     if (prices.length < 2) {
-      throw Exception('Недостаточно исторических данных для анализа.');
+      throw Exception(
+        'Недостаточно исторических '
+        'данных для анализа.',
+      );
     }
 
     prices.sort((HistoricalPricePoint a, HistoricalPricePoint b) {
@@ -352,9 +323,11 @@ class HistoricalPriceService {
     });
 
     final double firstPrice = prices.first.close;
+
     final double lastPrice = prices.last.close;
 
     double highestPrice = firstPrice;
+
     double lowestPrice = firstPrice;
 
     for (final HistoricalPricePoint point in prices) {
@@ -436,6 +409,7 @@ class HistoricalPriceService {
 
     for (int i = 1; i < prices.length; i++) {
       final double previous = prices[i - 1].close;
+
       final double current = prices[i].close;
 
       if (previous <= 0.0) {
@@ -482,6 +456,7 @@ class HistoricalPriceService {
     }
 
     double peak = prices.first.close;
+
     double maxDrawdown = 0.0;
 
     for (final HistoricalPricePoint point in prices) {
@@ -519,6 +494,7 @@ class HistoricalPriceService {
 
     for (int i = 0; i < n; i++) {
       final double x = i.toDouble();
+
       final double y = prices[i].close;
 
       sumX += x;
@@ -536,16 +512,20 @@ class HistoricalPriceService {
     final double slope = (n * sumXY - sumX * sumY) / denominator;
 
     final double meanX = sumX / n;
+
     final double meanY = sumY / n;
 
     final double intercept = meanY - slope * meanX;
 
     double totalVariation = 0.0;
+
     double residualVariation = 0.0;
 
     for (int i = 0; i < n; i++) {
       final double x = i.toDouble();
+
       final double actual = prices[i].close;
+
       final double predicted = intercept + slope * x;
 
       final double totalDifference = actual - meanY;
@@ -597,6 +577,7 @@ class HistoricalPriceService {
     }
 
     final cacheKey = '$ticker:$days';
+
     final cached = _cache[cacheKey];
 
     if (cached == null) {
@@ -657,10 +638,10 @@ class _TrendResult {
   });
 }
 
-class _TemporaryTwelveDataException implements Exception {
+class _TemporaryHistoricalDataException implements Exception {
   final String message;
 
-  const _TemporaryTwelveDataException(this.message);
+  const _TemporaryHistoricalDataException(this.message);
 
   @override
   String toString() => message;

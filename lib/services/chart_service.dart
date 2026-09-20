@@ -2,13 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-enum ChartPeriod {
-  oneDay,
-  oneWeek,
-  oneMonth,
-  threeMonths,
-  oneYear,
-}
+enum ChartPeriod { oneDay, oneWeek, oneMonth, threeMonths, oneYear }
 
 class ChartPoint {
   final DateTime dateTime;
@@ -32,9 +26,7 @@ class ChartPoint {
       return double.tryParse(json[key]?.toString() ?? '') ?? 0;
     }
 
-    final parsedDate = DateTime.tryParse(
-      json['datetime']?.toString() ?? '',
-    );
+    final parsedDate = DateTime.tryParse(json['datetime']?.toString() ?? '');
 
     if (parsedDate == null) {
       throw const FormatException('Некорректная дата графика.');
@@ -52,60 +44,64 @@ class ChartPoint {
 }
 
 class ChartService {
-  static const String _apiKey = String.fromEnvironment(
-    'TWELVE_DATA_API_KEY',
+  static const String _backendBaseUrl = String.fromEnvironment(
+    'BACKEND_URL',
+    defaultValue: 'http://localhost:3000',
   );
 
   Future<List<ChartPoint>> fetchChart({
     required String symbol,
     required ChartPeriod period,
   }) async {
-    if (_apiKey.isEmpty) {
-      throw StateError(
-        'Не передан ключ TWELVE_DATA_API_KEY.',
-      );
+    final ticker = symbol.trim().toUpperCase();
+
+    if (ticker.isEmpty) {
+      throw ArgumentError('Тикер не указан.');
     }
 
     final settings = _settingsForPeriod(period);
 
-    final uri = Uri.https(
-      'api.twelvedata.com',
-      '/time_series',
-      {
-        'symbol': symbol.toUpperCase(),
+    final uri = Uri.parse('$_backendBaseUrl/api/market/time-series').replace(
+      queryParameters: {
+        'symbol': ticker,
         'interval': settings.interval,
         'outputsize': settings.outputSize.toString(),
         'order': 'ASC',
-        'apikey': _apiKey,
       },
     );
 
-    final response = await http
-        .get(uri)
-        .timeout(const Duration(seconds: 20));
+    final response = await http.get(uri).timeout(const Duration(seconds: 30));
 
     if (response.statusCode == 429) {
-      throw Exception('Превышен лимит запросов Twelve Data.');
+      throw Exception(
+        'Источник исторических данных '
+        'временно ограничил запросы.',
+      );
+    }
+
+    if (response.statusCode >= 500) {
+      throw Exception(
+        'Сервер InvestMind временно '
+        'недоступен.',
+      );
     }
 
     if (response.statusCode != 200) {
       throw Exception(
-        'Ошибка Twelve Data: HTTP ${response.statusCode}',
+        'Ошибка получения графика: '
+        'HTTP ${response.statusCode}',
       );
     }
 
     final decoded = jsonDecode(response.body);
 
     if (decoded is! Map<String, dynamic>) {
-      throw const FormatException(
-        'Получен неизвестный формат данных.',
-      );
+      throw const FormatException('Получен неизвестный формат данных.');
     }
 
     if (decoded['status'] == 'error') {
       throw Exception(
-        decoded['message']?.toString() ??
-            'Twelve Data вернул ошибку.',
+        decoded['message']?.toString() ?? 'Источник данных вернул ошибку.',
       );
     }
 
@@ -113,18 +109,17 @@ class ChartService {
 
     if (values is! List || values.isEmpty) {
       throw Exception(
-        'Исторические данные для $symbol не найдены.',
+        'Исторические данные для '
+        '$ticker не найдены.',
       );
     }
 
-    final points = values
-        .whereType<Map<String, dynamic>>()
-        .map(ChartPoint.fromJson)
-        .toList()
-      ..sort(
-        (first, second) =>
-            first.dateTime.compareTo(second.dateTime),
-      );
+    final points =
+        values
+            .whereType<Map<String, dynamic>>()
+            .map(ChartPoint.fromJson)
+            .toList()
+          ..sort((first, second) => first.dateTime.compareTo(second.dateTime));
 
     return points;
   }
@@ -132,34 +127,19 @@ class ChartService {
   _ChartSettings _settingsForPeriod(ChartPeriod period) {
     switch (period) {
       case ChartPeriod.oneDay:
-        return const _ChartSettings(
-          interval: '5min',
-          outputSize: 78,
-        );
+        return const _ChartSettings(interval: '5min', outputSize: 78);
 
       case ChartPeriod.oneWeek:
-        return const _ChartSettings(
-          interval: '30min',
-          outputSize: 65,
-        );
+        return const _ChartSettings(interval: '30min', outputSize: 65);
 
       case ChartPeriod.oneMonth:
-        return const _ChartSettings(
-          interval: '1day',
-          outputSize: 30,
-        );
+        return const _ChartSettings(interval: '1day', outputSize: 30);
 
       case ChartPeriod.threeMonths:
-        return const _ChartSettings(
-          interval: '1day',
-          outputSize: 90,
-        );
+        return const _ChartSettings(interval: '1day', outputSize: 90);
 
       case ChartPeriod.oneYear:
-        return const _ChartSettings(
-          interval: '1day',
-          outputSize: 365,
-        );
+        return const _ChartSettings(interval: '1day', outputSize: 365);
     }
   }
 }
@@ -168,8 +148,5 @@ class _ChartSettings {
   final String interval;
   final int outputSize;
 
-  const _ChartSettings({
-    required this.interval,
-    required this.outputSize,
-  });
+  const _ChartSettings({required this.interval, required this.outputSize});
 }

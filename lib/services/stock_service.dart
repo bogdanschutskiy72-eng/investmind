@@ -3,8 +3,6 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import 'finnhub_http_client.dart';
-
 class StockQuote {
   final double currentPrice;
   final double change;
@@ -75,7 +73,10 @@ class StockSearchResult {
 }
 
 class StockService {
-  static const String _apiKey = String.fromEnvironment('FINNHUB_API_KEY');
+  static const String _backendBaseUrl = String.fromEnvironment(
+    'BACKEND_URL',
+    defaultValue: 'http://localhost:3000',
+  );
 
   static const Duration _cacheDuration = Duration(seconds: 60);
 
@@ -84,18 +85,10 @@ class StockService {
   static final Map<String, Future<StockQuote>> _inFlightQuotes =
       <String, Future<StockQuote>>{};
 
-  void _checkApiKey() {
-    if (_apiKey.isEmpty) {
-      throw StateError('API-ключ не передан через FINNHUB_API_KEY.');
-    }
-  }
-
   Future<StockQuote> fetchQuote(
     String symbol, {
     bool forceRefresh = false,
   }) async {
-    _checkApiKey();
-
     final normalizedSymbol = symbol.trim().toUpperCase();
 
     if (normalizedSymbol.isEmpty) {
@@ -127,61 +120,62 @@ class StockService {
 
   Future<StockQuote> _loadQuote(String symbol, {StockQuote? staleQuote}) async {
     try {
-      final quote = await _fetchQuoteFromApi(symbol);
+      final quote = await _fetchQuoteFromBackend(symbol);
 
       _quoteCache[symbol] = _CachedQuote(quote: quote, savedAt: DateTime.now());
 
       return quote;
-    } on _TemporaryStockException {
-      if (staleQuote != null) {
-        return staleQuote;
-      }
-
-      rethrow;
     } on TimeoutException {
       if (staleQuote != null) {
         return staleQuote;
       }
 
       throw Exception(
-        'Finnhub временно не отвечает. '
-        'Повтори позже.',
+        'Сервер InvestMind временно '
+        'не отвечает.',
       );
     } on http.ClientException {
       if (staleQuote != null) {
         return staleQuote;
       }
 
-      throw Exception('Не удалось подключиться к Finnhub.');
+      throw Exception(
+        'Не удалось подключиться '
+        'к серверу InvestMind.',
+      );
+    } catch (_) {
+      if (staleQuote != null) {
+        return staleQuote;
+      }
+
+      rethrow;
     }
   }
 
-  Future<StockQuote> _fetchQuoteFromApi(String symbol) async {
-    final uri = Uri.https('finnhub.io', '/api/v1/quote', {
-      'symbol': symbol,
-      'token': _apiKey,
-    });
+  Future<StockQuote> _fetchQuoteFromBackend(String symbol) async {
+    final uri = Uri.parse(
+      '$_backendBaseUrl/api/market/quote',
+    ).replace(queryParameters: {'symbol': symbol});
 
-    final response = await FinnhubHttpClient.instance.get(uri);
+    final response = await http.get(uri).timeout(const Duration(seconds: 25));
 
-    if (response.statusCode == 401 || response.statusCode == 403) {
+    if (response.statusCode == 429) {
       throw Exception(
-        'Finnhub отклонил API-ключ. '
-        'Проверь FINNHUB_API_KEY.',
+        'Источник рыночных данных '
+        'временно ограничил запросы.',
       );
     }
 
-    if (response.statusCode == 429) {
-      throw const _TemporaryStockException('Превышен лимит запросов Finnhub.');
-    }
-
     if (response.statusCode >= 500) {
-      throw const _TemporaryStockException('Finnhub временно недоступен.');
+      throw Exception(
+        'Сервер InvestMind временно '
+        'недоступен.',
+      );
     }
 
     if (response.statusCode != 200) {
       throw Exception(
-        'Ошибка Finnhub: '
+        'Ошибка получения котировки: '
         'HTTP ${response.statusCode}',
       );
     }
@@ -190,7 +184,7 @@ class StockService {
 
     if (decoded is! Map<String, dynamic>) {
       throw const FormatException(
-        'Finnhub вернул данные '
+        'Сервер вернул данные '
         'неизвестного формата.',
       );
     }
@@ -198,34 +192,27 @@ class StockService {
     final quote = StockQuote.fromJson(decoded);
 
     if (quote.currentPrice <= 0) {
-      throw Exception('Котировка для $symbol не найдена.');
+      throw Exception(
+        'Котировка для $symbol '
+        'не найдена.',
+      );
     }
 
     return quote;
   }
 
   Future<List<StockSearchResult>> searchSymbols(String query) async {
-    _checkApiKey();
-
     final cleanedQuery = query.trim();
 
     if (cleanedQuery.isEmpty) {
       return [];
     }
 
-    final uri = Uri.https('finnhub.io', '/api/v1/search', {
-      'q': cleanedQuery,
-      'token': _apiKey,
-    });
+    final uri = Uri.parse(
+      '$_backendBaseUrl/api/market/search',
+    ).replace(queryParameters: {'q': cleanedQuery});
 
-    final response = await FinnhubHttpClient.instance.get(uri);
-
-    if (response.statusCode == 401 || response.statusCode == 403) {
-      throw Exception(
-        'Finnhub отклонил API-ключ. '
-        'Проверь FINNHUB_API_KEY.',
-      );
-    }
+    final response = await http.get(uri).timeout(const Duration(seconds: 25));
 
     if (response.statusCode == 429) {
       throw Exception(
@@ -235,12 +222,15 @@ class StockService {
     }
 
     if (response.statusCode >= 500) {
-      throw Exception('Поиск Finnhub временно недоступен.');
+      throw Exception(
+        'Поиск InvestMind временно '
+        'недоступен.',
+      );
     }
 
     if (response.statusCode != 200) {
       throw Exception(
-        'Ошибка поиска Finnhub: '
+        'Ошибка поиска: '
         'HTTP ${response.statusCode}',
       );
     }
@@ -249,7 +239,7 @@ class StockService {
 
     if (decoded is! Map<String, dynamic>) {
       throw const FormatException(
-        'Finnhub вернул неизвестный '
+        'Сервер вернул неизвестный '
         'формат поиска.',
       );
     }
@@ -287,13 +277,4 @@ class _CachedQuote {
   bool get isExpired {
     return DateTime.now().difference(savedAt) > StockService._cacheDuration;
   }
-}
-
-class _TemporaryStockException implements Exception {
-  final String message;
-
-  const _TemporaryStockException(this.message);
-
-  @override
-  String toString() => message;
 }

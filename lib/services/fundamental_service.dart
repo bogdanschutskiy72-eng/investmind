@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'finnhub_http_client.dart';
+import 'package:http/http.dart' as http;
 
 class FundamentalData {
   final String symbol;
@@ -107,7 +107,6 @@ class FundamentalData {
 
   bool get hasWeek52LowData => _hasAnyMetric(['52WeekLow']);
 
-  // Совместимость с уже существующим UI.
   bool get hasPe => hasPeData;
 
   bool get hasForwardPe => hasForwardPeData;
@@ -141,7 +140,6 @@ class FundamentalData {
   int get dataCompletenessPercent {
     int score = 0;
 
-    // Growth — 20
     if (hasRevenueGrowthData) {
       score += 10;
     }
@@ -150,7 +148,6 @@ class FundamentalData {
       score += 10;
     }
 
-    // Profitability — 25
     if (hasNetMarginData) {
       score += 8;
     }
@@ -167,7 +164,6 @@ class FundamentalData {
       score += 5;
     }
 
-    // Valuation — 20
     if (hasPeData) {
       score += 8;
     }
@@ -180,7 +176,6 @@ class FundamentalData {
       score += 6;
     }
 
-    // Financial health — 29
     if (hasCurrentRatioData) {
       score += 7;
     }
@@ -197,7 +192,6 @@ class FundamentalData {
       score += 8;
     }
 
-    // Market risk — 6
     if (hasBetaData) {
       score += 6;
     }
@@ -323,49 +317,42 @@ class FundamentalData {
 }
 
 class FundamentalService {
-  static const String _apiKey = String.fromEnvironment('FINNHUB_API_KEY');
+  static const String _backendBaseUrl = String.fromEnvironment(
+    'BACKEND_URL',
+    defaultValue: 'http://localhost:3000',
+  );
 
   Future<FundamentalData> fetchFundamentals(String symbol) async {
-    if (_apiKey.isEmpty) {
-      throw Exception(
-        'FINNHUB_API_KEY не передан '
-        'при запуске приложения.',
-      );
-    }
-
     final String ticker = symbol.trim().toUpperCase();
 
     if (ticker.isEmpty) {
       throw ArgumentError('Тикер не указан.');
     }
 
-    final Uri uri = Uri.https('finnhub.io', '/api/v1/stock/metric', {
-      'symbol': ticker,
-      'metric': 'all',
-      'token': _apiKey,
-    });
+    final uri = Uri.parse(
+      '$_backendBaseUrl/api/market/metrics',
+    ).replace(queryParameters: {'symbol': ticker});
 
-    final response = await FinnhubHttpClient.instance.get(uri);
-
-    if (response.statusCode == 401 || response.statusCode == 403) {
-      throw Exception('Finnhub отклонил API-ключ.');
-    }
+    final response = await http.get(uri).timeout(const Duration(seconds: 25));
 
     if (response.statusCode == 429) {
       throw Exception(
-        'Finnhub временно ограничил '
-        'количество запросов.',
+        'Источник данных временно '
+        'ограничил запросы.',
       );
     }
 
     if (response.statusCode >= 500) {
-      throw Exception('Finnhub временно недоступен.');
+      throw Exception(
+        'Сервер InvestMind временно '
+        'недоступен.',
+      );
     }
 
     if (response.statusCode != 200) {
       throw Exception(
-        'Ошибка Finnhub fundamentals: '
-        '${response.statusCode}',
+        'Ошибка получения фундаментальных данных: '
+        'HTTP ${response.statusCode}',
       );
     }
 
@@ -373,7 +360,7 @@ class FundamentalService {
 
     if (decoded is! Map) {
       throw Exception(
-        'Finnhub вернул некорректные '
+        'Сервер вернул некорректные '
         'фундаментальные данные.',
       );
     }
