@@ -10,7 +10,9 @@ const {
 } = require('./market_data_cache');
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(
+  process.env.PORT || 3000,
+);
 
 // ------------------------------------------------------------
 // Backend cache
@@ -2049,6 +2051,7 @@ app.use(
 
 app.listen(
   PORT,
+  '0.0.0.0',
   () => {
     console.log(
       `InvestMind Backend запущен на порту ${PORT}`,
