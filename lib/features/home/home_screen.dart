@@ -20,9 +20,30 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   const SizedBox(height: 20),
 
-                  const Text(
-                    'Добрый вечер, Богдан 👋',
-                    style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+                  Builder(
+                    builder: (context) {
+                      final hour = DateTime.now().hour;
+
+                      final String greeting;
+
+                      if (hour >= 5 && hour < 12) {
+                        greeting = 'Доброе утро';
+                      } else if (hour >= 12 && hour < 18) {
+                        greeting = 'Добрый день';
+                      } else if (hour >= 18 && hour < 23) {
+                        greeting = 'Добрый вечер';
+                      } else {
+                        greeting = 'Доброй ночи';
+                      }
+
+                      return Text(
+                        '$greeting 👋',
+                        style: const TextStyle(
+                          fontSize: 30,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 8),
