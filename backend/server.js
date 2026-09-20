@@ -83,17 +83,66 @@ if (!TWELVE_DATA_API_KEY) {
 // Middleware
 // ------------------------------------------------------------
 
-app.use(cors());
+const defaultAllowedOrigins = [
+  'http://localhost:5000',
+  'http://127.0.0.1:5000',
+];
+
+const envAllowedOrigins =
+  String(
+    process.env.FRONTEND_ORIGINS ?? '',
+  )
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+const allowedOrigins =
+  new Set([
+    ...defaultAllowedOrigins,
+    ...envAllowedOrigins,
+  ]);
 
 app.use(
-  express.json({
-    limit: '100kb',
+  cors({
+    origin(origin, callback) {
+      // Разрешаем запросы без Origin:
+      // health checks, curl, серверные запросы.
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (
+        allowedOrigins.has(origin)
+      ) {
+        return callback(null, true);
+      }
+
+      return callback(
+        new Error(
+          `CORS blocked origin: ${origin}`,
+        ),
+      );
+    },
+
+    methods: [
+      'GET',
+      'POST',
+    ],
+
+    allowedHeaders: [
+      'Content-Type',
+    ],
   }),
 );
 
 // ------------------------------------------------------------
 // Rate limits
 // ------------------------------------------------------------
+app.use(
+  express.json({
+    limit: '100kb',
+  }),
+);
 
 function rateLimitHandler(message) {
   return (req, res) => {
@@ -1253,6 +1302,7 @@ app.post(
   analyzeRateLimiter,
   async (req, res) => {
     try {
+
       const data = req.body;
 
       if (
